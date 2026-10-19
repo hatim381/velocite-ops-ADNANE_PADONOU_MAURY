@@ -37,12 +37,24 @@ sur le poste :
 docker compose ps --format "table {{.Service}}\t{{.Ports}}"
 ```
 
+
 | Service | Rôle | Service ou job ? | Ports publiés |
 |---|---|---|---|
-| | | | |
+| api | comptes, trajets, statistiques | Service | 8080, 9100 |
+| garage | stockage objet S3 | Service | |
+| ingest | télémétrie des véhicules | Service | 8081, 9100 |
+| init-stockage | initialisation, une fois | Job | |
+| loadgen | générateur d'activité et client témoin | Service | 9100 |
+| nginx | frontal TLS, seul point d'entrée | Service | 8080, 8443 |
+| postgres | référentiel | Service | 5432 |
+| redis | limiteur et cache | Service | 6379 |
+| seed | | Job | |
+| batch | bilan quotidien (profil `batch`) | Service | |
 
 Question : `batch` et `verif` n'apparaissent pas dans `docker compose ps`.
 Pourquoi ?
+
+Ce sont des jobs planifié ou à lancer manuellement
 
 ## 2. Les dépendances
 
@@ -68,6 +80,17 @@ Collez la sortie ici, puis répondez : dans quel ordre les services
 démarrent-ils ? Les trois conditions (`service_started`, `service_healthy`,
 `service_completed_successfully`) sont expliquées sur la slide 11.
 
+api attend seed (service_completed_successfully) <br>
+ingest attend postgres (service_healthy)<br>
+init-stockage attend garage (service_started)<br>
+loadgen attend nginx (service_healthy)<br>
+nginx attend api (service_healthy)<br>
+nginx attend ingest (service_healthy)<br>
+seed attend init-stockage (service_completed_successfully)<br>
+seed attend postgres (service_healthy)<br>
+
+postgres -> garage -> redis -> init-stockage -> ingest -> seed -> api -> nginx -> loadgen
+
 ## 3. La configuration qui n'est pas secrète
 
 Quels réglages chaque service reçoit-il en clair ?
@@ -90,7 +113,17 @@ docker compose --profile "*" config --format json | jq -r '.services | to_entrie
 
 | Paramètre | Service | Valeur locale | Change entre dev et prod ? |
 |---|---|---|---|
-| | | | |
+| `S3_ENDPOINT` | api | `http://garage:3900` | Oui |
+| `VELOCITE_ENV` | api | `local` | Oui |
+| `S3_ENDPOINT` | batch | `http://garage:3900` | Oui |
+| `GARAGE_ADMIN_URL` | init-stockage | `http://garage:3903` | Oui |
+| `EXFIL_INTERVAL` | loadgen | `20m` | Potentiellement |
+| `FRONTAL_CA_PATH` | loadgen | `/run/secrets/ca.crt` | Potentiellement |
+| `FRONTAL_URL` | loadgen | `https://nginx:8443` | Oui |
+| `POSTGRES_DB` | postgres | `velocite` | Potentiellement |
+| `POSTGRES_USER` | postgres | `postgres` | Potentiellement |
+| `DATASETS_DIR` | seed | `/datasets` | Potentiellement |
+| `S3_ENDPOINT` | seed | `http://garage:3900` | Oui |
 
 ## 4. Les secrets
 
