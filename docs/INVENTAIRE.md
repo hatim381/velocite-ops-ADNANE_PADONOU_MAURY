@@ -37,23 +37,6 @@ sur le poste :
 docker compose ps --format "table {{.Service}}\t{{.Ports}}"
 ```
 
-
-| Service | Rôle | Service ou job ? | Ports publiés |
-|---|---|---|---|
-| api | comptes, trajets, statistiques | Service | 8080, 9100 |
-| garage | stockage objet S3 | Service | |
-| ingest | télémétrie des véhicules | Service | 8081, 9100 |
-| init-stockage | initialisation, une fois | Job | |
-| loadgen | générateur d'activité et client témoin | Service | 9100 |
-| nginx | frontal TLS, seul point d'entrée | Service | 8080, 8443 |
-| postgres | référentiel | Service | 5432 |
-| redis | limiteur et cache | Service | 6379 |
-| seed | | Job | |
-| batch | bilan quotidien (profil `batch`) | Service | |
-
-
-#HATIM
-
 | Service | Rôle | Service ou job ? | Ports publiés |
 |---|---|---|---|
 | garage | Stockage objet S3 | Service continu |  |
@@ -71,7 +54,8 @@ docker compose ps --format "table {{.Service}}\t{{.Ports}}"
 Question : `batch` et `verif` n'apparaissent pas dans `docker compose ps`.
 Pourquoi ?
 
-Ce sont des jobs planifié ou à lancer manuellement
+--profile "*" affiche les services rangés dans un profil (batch et verif), que docker compose ps n'affiche pas par défaut.
+Ce sont aussi des jobs planifié ou à lancer manuellement
 
 ## 2. Les dépendances
 
@@ -97,7 +81,9 @@ Collez la sortie ici, puis répondez : dans quel ordre les services
 démarrent-ils ? Les trois conditions (`service_started`, `service_healthy`,
 `service_completed_successfully`) sont expliquées sur la slide 11.
 
-api attend seed (service_completed_successfully) <br>
+api attend postgres (service_healthy)<br>
+api attend redis (service_healthy)<br>
+api attend seed (service_completed_successfully)<br>
 ingest attend postgres (service_healthy)<br>
 init-stockage attend garage (service_started)<br>
 loadgen attend nginx (service_healthy)<br>
@@ -106,7 +92,9 @@ nginx attend ingest (service_healthy)<br>
 seed attend init-stockage (service_completed_successfully)<br>
 seed attend postgres (service_healthy)<br>
 
-postgres -> garage -> redis -> init-stockage -> ingest -> seed -> api -> nginx -> loadgen
+-> postgres <br> 
+-> redis <br>
+-> garage -> init-stockage -> ingest -> seed -> api -> nginx -> loadgen
 
 ## 3. La configuration qui n'est pas secrète
 
@@ -147,6 +135,8 @@ docker compose --profile "*" config --format json | jq -r '.services | to_entrie
 Combien de fichiers de secrets le script a-t-il générés, et combien Compose
 en déclare-t-il ?
 
+Le script génère 35 fichiers et compose en déclare 34. Le fichier qui n'est pas déclaré est redis_api .
+
 Windows :
 
 ```powershell
@@ -182,15 +172,31 @@ clés S3, certificats) :
 
 | Famille | Fichiers | Lus par |
 |---|---|---|
-| | | |
+| Mots de passe | `postgres_password`, `pg_svc_*`, `admin_password`, `service_password`, `datasci_password`, `analyst_password`, `support_password`, `redis_users.acl`, `redis_sonde` | `postgres`, `seed`, `loadgen`, `redis`, `verif` |
+| Adresses de connexion | `database_url_*`, `redis_url_api` | `api`, `ingest`, `batch`, `seed`, `verif` |
+| Tokens et clés | `jwt_secret`, `pseudo_key`, `ingest_device_key`, `garage_rpc_secret`, `garage_admin_token`, `garage_metrics_token` | `api`, `garage`, `init-stockage`, `ingest`, `loadgen`, `batch`, `verif` |
+| Clés S3 | `s3_api_*`, `s3_batch_*`, `s3_seed_*` | `api`, `batch`, `seed`, `init-stockage`, `verif` |
+| Certificats | `ca.crt`, `nginx.crt`, `nginx.key`, `postgres.crt`, `postgres.key` | `api`, `batch`, `ingest`, `loadgen`, `seed`, `verif`, `nginx`, `postgres` |
 
 Questions :
 
 - Certains secrets en contiennent un autre (ouvrez `secrets/database_url_api`
   et comparez avec `secrets/pg_svc_api`). Lesquels ? Que se passe-t-il si
-  l'on change l'un sans l'autre ?
+  l'on change l'un sans l'autre ? <br>
+
+  database_url_api contient pg_svc_api <br>
+  database_url_batch contient pg_svc_batch <br>
+  database_url_ingest contient pg_svc_ingest <br>
+  database_url_seed contient pg_svc_seed <br>
+
+  Si on change l'un sans l'autre, l’API essaiera alors de se connecter avec un ancien mot de passe et la connexion à PostgreSQL échouera.
+
 - Un fichier est généré mais déclaré nulle part. Lequel, et pourquoi
-  n'est-ce pas une erreur ? Pour le trouver :
+  n'est-ce pas une erreur ? Pour le trouver : <br>
+
+  Ce fichier est : `redis_api`. Il sert de fichier intermédiaire au script `init.py` pour construire
+  `redis_url_api`, qui contient l’URL complète de connexion à Redis.
+  Il n’a donc pas besoin d’être lu directement par un conteneur.
 
 Windows :
 
