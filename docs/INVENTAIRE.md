@@ -217,9 +217,23 @@ Indice : cherchez son nom dans `services/init/init.py`.
 À partir des sections 3 et 4 et de la slide 13 : qu'est-ce qui devra avoir une
 valeur différente en dev et en prod ? Une ligne par élément.
 
+| Élément | Valeur différente entre dev et prod |
+|---|---|
+| Secrets | Chaque mot de passe, token, clé S3, clé de chiffrement et certificat doit être propre à l'environnement. |
+| `VELOCITE_ENV` | Le nom de l'environnement passe de `local` ou `dev` à `prod`. |
+| Port HTTPS de nginx | Le port publié est `8443` en développement et sera `9443` en production. |
+| `S3_ENDPOINT` et les adresses de services externes | Les adresses pointent vers les ressources de l'environnement concerné. |
+| Version de l'API et des images | Une version est validée en développement avant d'être utilisée en production. |
+| Nombre de réplicas des services sans état | Le nombre d'instances de l'API, d'ingest et de nginx est ajusté au besoin de l'environnement. |
+
 ## 6. Questions ouvertes
+
+Aucune question ouverte après les vérifications de l'atelier.
 
 ## 7. Ce que cet inventaire protège
 
 Une phrase, sans aucun terme technique, pour quelqu'un qui ne fait pas
 d'informatique.
+
+Cet inventaire permet de remettre le service de vélos en route après une panne,
+sans perdre les données ni divulguer les informations privées des utilisateurs.

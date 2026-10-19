@@ -45,6 +45,36 @@ Votre schéma :
 
 ```mermaid
 flowchart LR
+  poste([Poste de l'utilisateur]) -- "HTTPS :8443" --> nginx
+
+  subgraph frontal["Réseau frontal"]
+    nginx[Nginx]
+    loadgen[Loadgen]
+  end
+
+  subgraph appli["Réseau appli"]
+    api[API]
+    ingest[Ingest]
+  end
+
+  subgraph donnees["Réseau donnees - interne"]
+    postgres[(PostgreSQL)]
+    redis[(Redis)]
+    garage[Garage]
+    init_stockage[Job : init-stockage]
+    seed[Job : seed]
+  end
+
+  loadgen --> nginx
+  nginx --> api
+  nginx --> ingest
+  api --> postgres
+  api --> redis
+  api --> seed
+  ingest --> postgres
+  init_stockage --> garage
+  seed --> init_stockage
+  seed --> postgres
 ```
 
 ## Les layers d'infrastructure
