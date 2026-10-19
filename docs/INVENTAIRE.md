@@ -51,6 +51,23 @@ docker compose ps --format "table {{.Service}}\t{{.Ports}}"
 | seed | | Job | |
 | batch | bilan quotidien (profil `batch`) | Service | |
 
+
+#HATIM
+
+| Service | Rôle | Service ou job ? | Ports publiés |
+|---|---|---|---|
+| garage | Stockage objet S3 | Service continu |  |
+| init-stockage | Initialisation du stockage | Job |  |
+| postgres | Base de données référentielle | Service continu | 5432 |
+| seed | Initialisation des données | Job |  |
+| redis | Cache et limiteur | Service continu | 6379 |
+| api | Comptes, trajets, statistiques | Service continu | 8080 / 9100 |
+| ingest | Télémétrie des véhicules | Service continu |  8081 / 9100 |
+| nginx | Frontal TLS, point d’entrée | Service continu | `127.0.0.1:8080`, `127.0.0.1:8443` |
+| verif | Vérification de l’installation | Job du profil `verif` |  |
+| batch | Bilan quotidien | Job du profil `batch` |  |
+| loadgen | Générateur d’activité et client témoin | Service continu | 9100 |
+
 Question : `batch` et `verif` n'apparaissent pas dans `docker compose ps`.
 Pourquoi ?
 
