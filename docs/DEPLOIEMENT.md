@@ -71,14 +71,97 @@ une erreur de kubeadm.
 ## 2. La phrase de passe du state
 
 ```powershell
-$env:TF_VAR_phrase_etat = Read-Host "Phrase du state"
+$env:TF_VAR_phrase_etat = Read-Host "0123456789012345"
 ```
 
+Choisissez une phrase de passe et conservez-la hors du dépôt. Elle chiffre les
+states OpenTofu des couches `10-outils` et `20-env`, qui peuvent contenir des
+secrets. La variable ne vaut que dans le terminal courant : il faut la définir
+à nouveau dans chaque nouveau terminal avant une commande `tofu` sur ces
+couches. Ne l'écrivez jamais dans un fichier, une commande sauvegardée ou Git.
+
 ## 3. Tout monter, en une commande
+
+À ce stade du mardi, le script automatise la création ou la remise en état du
+cluster kind. Les autres étapes seront ajoutées au fil des ateliers. Après
+avoir défini la phrase de passe :
+
+```powershell
+./scripts/up.ps1 -Env dev -SansImages
+```
+
+Le script vérifie les prérequis, initialise la couche `infra/00-cluster`,
+applique le code du cluster puis sélectionne le contexte `kind-velocite`.
+Avec la configuration actuelle, il doit laisser un control-plane et un worker
+prêts. L'option `-SansImages` évite le chargement des images VéloCité tant que
+les applications ne sont pas encore déployées sur Kubernetes.
 
 ## 4. Les étapes, une par une
 
 Pour chaque étape : la commande, ce qu'on doit voir, comment le vérifier.
+
+### 1. Libérer le port HTTPS local
+
+Depuis le dossier `app`, arrêtez la plateforme Docker Compose du lundi avant
+de créer le cluster :
+
+```powershell
+docker compose down
+```
+
+Le cluster kind publie ensuite son port de développement sur `127.0.0.1:8443`.
+Cette commande arrête les conteneurs Compose mais conserve leurs volumes.
+
+### 2. Créer le cluster kind avec OpenTofu
+
+```powershell
+cd ./infra/00-cluster
+tofu init
+tofu plan
+tofu apply
+```
+
+Lors du premier passage, le plan annonce la création d'une ressource
+`kind_cluster.velocite`. Lisez le plan avant de répondre `yes` : il crée un
+control-plane et un worker, avec Kubernetes v1.36.4. Le cluster actuel est
+conforme au code : un nouveau `tofu plan` répond `No changes. Your
+infrastructure matches the configuration.`
+
+Vérifiez le résultat :
+
+```powershell
+kubectl config current-context
+kubectl get nodes
+```
+
+Le contexte attendu est `kind-velocite`. Deux nœuds sont `Ready` :
+`velocite-control-plane` et `velocite-worker`.
+
+### 3. Prouver que le second passage ne change rien
+
+```powershell
+tofu plan
+```
+
+La réponse attendue et obtenue est `No changes.` Cela prouve que le cluster
+existant correspond toujours à la description versionnée.
+
+### 4. Installer les outils partagés du cluster
+
+Définissez d'abord la phrase de passe (section 2), puis :
+
+```powershell
+cd ../10-outils
+tofu init
+tofu apply
+kubectl get namespaces
+kubectl get pods -A
+```
+
+Les namespaces `argo` et `observabilite` doivent être `Active`. Les pods Argo,
+Grafana, Loki, Prometheus, Alloy et metrics-server doivent être en état
+`Running` (ou tous leurs conteneurs prêts). Ils constituent les outils
+partagés par les futurs environnements `dev` et `prod`.
 
 ## 5. Accéder à la plateforme
 

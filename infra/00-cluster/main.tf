@@ -8,7 +8,6 @@
 #
 # Cette couche change rarement. La détruire détruit tout ce qui est au-dessus.
 # ---------------------------------------------------------------------------
-
 # A FAIRE (atelier 3) : une ressource kind_cluster nommée "velocite" qui
 #   1. prend son nom dans var.nom_cluster et son image dans var.image_noeud ;
 #   2. attend que le cluster soit prêt avant de rendre la main ;
@@ -21,3 +20,44 @@
 #
 # Documentation du provider : https://search.opentofu.org/provider/tehcyx/kind/latest
 # (onglet Documentation, ressource kind_cluster, bloc kind_config).
+
+resource "kind_cluster" "velocite" {
+  name           = var.nom_cluster
+  node_image     = var.image_noeud
+  wait_for_ready = true
+ 
+  kind_config {
+    kind        = "Cluster"
+    api_version = "kind.x-k8s.io/v1alpha4"
+ 
+    networking {
+      pod_subnet     = "10.244.0.0/16"
+      service_subnet = "10.96.0.0/12"
+    }
+ 
+    # Noeud Control-Plane avec exposition dynamique des ports
+    node {
+      role = "control-plane"
+ 
+      dynamic "extra_port_mappings" {
+        for_each = var.ports_exposes
+        content {
+          container_port = extra_port_mappings.value.node_port
+          host_port      = extra_port_mappings.value.port_poste
+          listen_address = "127.0.0.1"
+        }
+      }
+    }
+ 
+    # Noeuds Workers dynamiques avec label
+    dynamic "node" {
+      for_each = range(var.nb_workers)
+      content {
+        role = "worker"
+        labels = {
+          "velocite.fr/pool" = "applicatif"
+        }
+      }
+    }
+  }
+}
