@@ -24,8 +24,8 @@ resource "kubernetes_namespace_v1" "ns" {
     name = var.namespace
     labels = {
       "velocite.fr/env" = var.env
-      # A FAIRE (atelier 4) : les étiquettes Pod Security Admission qui
-      # imposent le niveau "restricted" (enforce), et préviennent (warn).
+      pod-security.kubernetes.io/enforce = restricted 
+      pod-security.kubernetes.io/warn    = restricted
     }
   }
 }
@@ -51,3 +51,28 @@ resource "kubernetes_namespace_v1" "ns" {
 output "namespace" {
   value = kubernetes_namespace_v1.ns.metadata[0].name
 }
+
+
+
+resource "kubernetes_limit_range_v1" "defauts" {
+  metadata { 
+    name      = "defauts" 
+    namespace = "exemple" 
+  } 
+  spec { 
+    limit { 
+      type = "Container" 
+      default = {           # la limite 
+        cpu = "500m", memory = "256Mi" } 
+      default_request = {   # la réservation 
+          cpu = "50m",  memory = "64Mi" } 
+       } 
+     } 
+  }
+
+  spec { 
+    pod_selector {}                
+    policy_types = ["Ingress", "Egress"]      
+    ports { port = "53", protocol = ["UDP", "TCP"] 
+    }   
+  }   
