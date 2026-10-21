@@ -1,0 +1,30 @@
+# Environnement de production.
+#   kubectl apply -k deploy/overlays/prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: velocite-prod
+
+# La version de l'API en service aujourd'hui.
+images:
+  - name: velocite/api
+    newTag: 2.1.0
+
+# Le frontal est publié sur localhost:9443 via le NodePort 30444.
+# L'API est gérée par l'autoscaler : le champ replicas de la base est retiré.
+
+resources:
+  - ../../base
+  - autoscaler.yaml
+  - budgets.yaml
+
+patches:
+  - path: nginx-service.yaml
+  - path: api-env.yaml
+  - path: replicas.yaml
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: remove
+        path: /spec/replicas
