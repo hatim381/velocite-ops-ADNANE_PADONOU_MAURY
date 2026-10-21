@@ -10,3 +10,5 @@ spec:
           env:
             - name: VELOCITE_ENV
               value: prod
+            - name: TRIPS_CACHE_TTL
+              value: "60"

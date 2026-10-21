@@ -8,7 +8,7 @@ namespace: velocite-prod
 # La version de l'API en service aujourd'hui.
 images:
   - name: velocite/api
-    newTag: 2.1.0
+    newTag: 2.2.0
 
 # Le frontal est publié sur localhost:9443 via le NodePort 30444.
 # L'API est gérée par l'autoscaler : le champ replicas de la base est retiré.

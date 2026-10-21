@@ -11,7 +11,7 @@ resources:
 # La version de l'API en service aujourd'hui.
 images:
   - name: velocite/api
-    newTag: 2.1.0
+    newTag: 2.2.0
 
 # A FAIRE (atelier 5) :
 #   1. publier le frontal sur le poste : le Service nginx en type NodePort,
