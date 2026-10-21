@@ -1,0 +1,69 @@
+# Client témoin : il génère du trafic par le frontal et expose ses métriques.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 120
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loadgen
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loadgen
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: loadgen
+          image: velocite/loadgen
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: FRONTAL_URL, value: "https://nginx:8443"}
+            - {name: FRONTAL_CA_PATH, value: /run/secrets/ca.crt}
+            - {name: INGEST_DEVICE_KEY_FILE, value: /run/secrets/ingest_device_key}
+            - {name: SERVICE_PASSWORD_FILE, value: /run/secrets/service_password}
+            - {name: DATASCI_PASSWORD_FILE, value: /run/secrets/datasci_password}
+            - {name: EXFIL_INTERVAL, value: 20m}
+          ports:
+            - {name: metriques, containerPort: 9100}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          volumeMounts:
+            - {name: secrets, mountPath: /run/secrets, readOnly: true}
+      volumes:
+        - name: secrets
+          projected:
+            defaultMode: 0440
+            sources:
+              - secret:
+                  name: velocite-app
+                  items:
+                    - {key: ingest_device_key, path: ingest_device_key}
+                    - {key: service_password, path: service_password}
+                    - {key: datasci_password, path: datasci_password}
+              - configMap:
+                  name: velocite-ca
+                  items:
+                    - {key: ca.crt, path: ca.crt}

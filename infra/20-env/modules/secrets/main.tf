@@ -4,6 +4,10 @@
 # Aucun secret n'est écrit dans le dépôt : ils naissent au premier apply,
 # vivent dans le state (chiffré) et dans des Secrets Kubernetes. Les noms de
 # clés sont ceux que les services lisent dans /run/secrets, comme en Compose.
+#
+# Atelier 4, version du cours (mercredi) : les deux Secrets sont écrits. Il
+# vous reste les valeurs marquées A_REMPLIR (entourées de deux soulignés de
+# chaque côté), chacune expliquée par le commentaire au-dessus d'elle.
 # ---------------------------------------------------------------------------
 
 terraform {
@@ -115,12 +119,24 @@ locals {
   }
 }
 
-# A FAIRE (atelier 4) : le Secret "velocite-db". Ses clés :
-#   postgres_password, pg_svc_api, pg_svc_ingest, pg_svc_batch, pg_svc_seed
-#     (les mots de passe générés plus haut, dans local.mdp)
-#   database_url_api, database_url_ingest, database_url_batch, database_url_seed
-#     (déjà calculées dans local.url_db)
-# Indice : merge() assemble deux maps en une.
+# Atelier 4 : le Secret "velocite-db". Neuf clés.
+#   - cinq mots de passe, pris dans local.mdp : postgres_password,
+#     pg_svc_api, pg_svc_ingest, pg_svc_batch, pg_svc_seed ;
+#   - les quatre URL de connexion, déjà calculées plus haut dans un local
+#     (cherchez "database_url_").
+# merge() met deux tables bout à bout (slide 24 du J2).
+resource "kubernetes_secret_v1" "db" {
+  metadata {
+    name      = "velocite-db"
+    namespace = var.namespace
+  }
+  data = merge(
+    # la liste des cinq noms, entre guillemets, séparés par des virgules
+    { for k in ["postgres_password", "pg_svc_api", "pg_svc_ingest", "pg_svc_batch", "pg_svc_seed"] : k => local.mdp[k] },
+    # le nom du local qui contient les quatre URL
+    local.url_db
+  )
+}
 
 resource "kubernetes_secret_v1" "redis" {
   metadata {
@@ -138,11 +154,28 @@ resource "kubernetes_secret_v1" "redis" {
   }
 }
 
-# A FAIRE (atelier 4) : le Secret "velocite-app". Ses clés :
-#   admin_password, service_password, datasci_password, analyst_password,
-#   support_password (dans local.mdp)
-#   jwt_secret et ingest_device_key (random_password.jetons)
-#   pseudo_key (random_id.hex32, au format hexadécimal)
+# Atelier 4 : le Secret "velocite-app". Huit clés, de trois origines :
+#   - cinq mots de passe des comptes, dans local.mdp : admin_password,
+#     service_password, datasci_password, analyst_password, support_password ;
+#   - deux tokens, dans random_password.jetons : jwt_secret et
+#     ingest_device_key ;
+#   - une clé hexadécimale, dans random_id.hex32 : pseudo_key. Le Secret
+#     velocite-garage, juste en dessous, lit une clé de la même façon.
+resource "kubernetes_secret_v1" "app" {
+  metadata {
+    name      = "velocite-app"
+    namespace = var.namespace
+  }
+  data = merge(
+    # la liste des cinq noms des comptes
+    { for k in ["admin_password", "service_password", "datasci_password", "analyst_password", "support_password"] : k => local.mdp[k] },
+    {
+      jwt_secret        = random_password.jetons["jwt_secret"].result
+      ingest_device_key = random_password.jetons["ingest_device_key"].result
+      pseudo_key        = random_id.hex32["pseudo_key"].hex
+    },
+  )
+}
 
 resource "kubernetes_secret_v1" "garage" {
   metadata {

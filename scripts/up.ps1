@@ -24,6 +24,7 @@ param(
 Test-Prerequis -Outils docker, kind, tofu, kubectl
 Test-PhraseEtat
 $ns = "velocite-$Env"
+$leger = if ($Leger) { "true" } else { "false" }
 [string[]]$varsCluster = @()
 if ($Leger) { $varsCluster = @("-var=nb_workers=0") }
 
@@ -39,10 +40,18 @@ if (-not $SansImages) {
     }
 }
 
-# A FAIRE : les outils du cluster (infra/10-outils), avec -var=leger=true
-#           si -Leger.
-# A FAIRE : l'environnement $Env (infra/20-env) : workspace, puis apply avec
-#           le bon fichier de variables.
+# Atelier 4, version du cours (mercredi) : les deux étapes suivantes.
+Invoke-Etape "Outils du cluster (infra/10-outils)" {
+    Invoke-Commande tofu "-chdir=$Racine/infra/10-outils" init -input=false
+    Invoke-Commande tofu "-chdir=$Racine/infra/10-outils" apply -input=false -auto-approve "-var=leger=$leger"
+}
+
+Invoke-Etape "Environnement $Env : namespace, garde-fous, secrets (infra/20-env)" {
+    Invoke-Commande tofu "-chdir=$Racine/infra/20-env" init -input=false
+    Invoke-Commande tofu "-chdir=$Racine/infra/20-env" workspace select -or-create $Env
+    Invoke-Commande tofu "-chdir=$Racine/infra/20-env" apply -input=false -auto-approve "-var-file=envs/$Env.tfvars"
+}
+
 # A FAIRE : les applications (deploy/overlays/$Env) ; attendre que chaque
 #           service soit prêt et que le Job d'initialisation soit terminé.
 # A FAIRE : le bilan quotidien (workflows/).

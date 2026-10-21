@@ -23,11 +23,10 @@ resources:
   - garage.yaml
   - initialisation.yaml
   - api.yaml
+  - ingest.yaml
+  - nginx.yaml
+  - loadgen.yaml
   - reseau.yaml
-  # A FAIRE (atelier 5) : ingest.yaml, nginx.yaml, loadgen.yaml, sur le
-  # modèle de api.yaml. Pour chacun : Service si d'autres pods l'appellent,
-  # Deployment, sondes, ressources, contexte de sécurité, secrets montés en
-  # fichiers (la liste des secrets de chaque service : app/compose.yaml).
 
 configMapGenerator:
   # Le suffixe de hachage ajouté au nom fait redémarrer Garage quand sa

@@ -17,5 +17,7 @@ images:
 #   1. publier le frontal sur le poste : le Service nginx en type NodePort,
 #      port de noeud 30443 (infra/00-cluster le publie sur localhost:8443) ;
 #   2. donner à l'API son nom d'environnement : VELOCITE_ENV=dev.
-# Deux correctifs (patches), un fichier chacun. Vérifier le rendu avant
-# d'appliquer : kubectl kustomize deploy/overlays/dev
+
+patches:
+  - path: nginx-service.yaml
+  - path: api-env.yaml

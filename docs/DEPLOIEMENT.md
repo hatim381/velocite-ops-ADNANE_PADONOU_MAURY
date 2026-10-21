@@ -163,11 +163,39 @@ Grafana, Loki, Prometheus, Alloy et metrics-server doivent être en état
 `Running` (ou tous leurs conteneurs prêts). Ils constituent les outils
 partagés par les futurs environnements `dev` et `prod`.
 
-## 5. Accéder à la plateforme
+## 5. Créer l'environnement dev
 
-## 6. Tout détruire
+Après avoir défini la phrase de passe du state, créez l'environnement de
+développement et ses garde-fous :
 
-## 7. Quand ça bloque
+```powershell
+tofu -chdir=infra/20-env init
+tofu -chdir=infra/20-env workspace select -or-create dev
+tofu -chdir=infra/20-env validate
+tofu -chdir=infra/20-env plan -var-file=envs/dev.tfvars
+tofu -chdir=infra/20-env apply -var-file=envs/dev.tfvars
+```
+
+Le plan initial annonce les ressources du namespace, des garde-fous et des
+secrets. Contrôlez ensuite les objets sans afficher leurs valeurs sensibles :
+
+```powershell
+kubectl get namespace velocite-dev
+kubectl -n velocite-dev get resourcequota,limitrange,networkpolicy,secrets
+kubectl -n velocite-dev describe secret velocite-db
+kubectl -n velocite-dev run essai --image=mirror.gcr.io/library/busybox:1.37 --restart=Never -- id
+tofu -chdir=infra/20-env plan -var-file=envs/dev.tfvars
+```
+
+Le namespace doit être `Active`, les garde-fous et les Secrets doivent être
+présents, le pod `essai` doit être refusé par la politique `restricted`, et le
+dernier plan doit indiquer `No changes.`
+
+## 6. Accéder à la plateforme
+
+## 7. Tout détruire
+
+## 8. Quand ça bloque
 
 | Symptôme | Cause probable | Que faire |
 |---|---|---|

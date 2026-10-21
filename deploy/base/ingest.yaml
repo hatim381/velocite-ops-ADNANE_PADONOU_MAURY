@@ -1,0 +1,96 @@
+# Ingestion de la télémétrie des vélos.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingest
+spec:
+  selector:
+    app.kubernetes.io/name: ingest
+  ports:
+    - {name: http, port: 8081, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingest
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 120
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingest
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ingest
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: ingest
+          image: velocite/ingest
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: DATABASE_URL_FILE, value: /run/secrets/database_url_ingest}
+            - {name: INGEST_DEVICE_KEY_FILE, value: /run/secrets/ingest_device_key}
+          ports:
+            - {name: http, containerPort: 8081}
+            - {name: metriques, containerPort: 9100}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              sleep: {seconds: 5}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 500m, memory: 192Mi}
+          volumeMounts:
+            - {name: secrets, mountPath: /run/secrets, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+        - name: secrets
+          projected:
+            defaultMode: 0440
+            sources:
+              - secret:
+                  name: velocite-db
+                  items:
+                    - {key: database_url_ingest, path: database_url_ingest}
+              - secret:
+                  name: velocite-app
+                  items:
+                    - {key: ingest_device_key, path: ingest_device_key}
+              - configMap:
+                  name: velocite-ca
+                  items:
+                    - {key: ca.crt, path: ca.crt}
