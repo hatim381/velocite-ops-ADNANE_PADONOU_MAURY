@@ -1,0 +1,50 @@
+# Montée en charge de l'API : de 2 à 4 pods, cible 70 % du CPU demandé.
+# Nécessite metrics-server (infra/10-outils).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 70}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+---
+# Budgets d'interruption : une opération volontaire (vidage d'un noeud,
+# mise à jour du cluster) ne retire jamais le dernier pod prêt.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: api}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ingest
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: ingest}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nginx
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: nginx}

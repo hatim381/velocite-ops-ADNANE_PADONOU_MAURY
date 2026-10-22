@@ -1,4 +1,6 @@
-# Frontal HTTPS de VéloCité.
+# Le frontal TLS : seul point d'entrée. Le Service est en ClusterIP dans la
+# base ; chaque overlay l'expose sur son port de noeud (30443 en dev, 30444
+# en prod), que kind publie sur le poste (infra/00-cluster).
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,7 +9,6 @@ spec:
   selector:
     app.kubernetes.io/name: nginx
   ports:
-    - {name: http, port: 8080, targetPort: http}
     - {name: https, port: 8443, targetPort: https}
 ---
 apiVersion: apps/v1
@@ -31,7 +32,6 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
@@ -49,18 +49,12 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
-          startupProbe:
-            httpGet: {path: /healthz, port: http}
-            periodSeconds: 2
-            failureThreshold: 30
           readinessProbe:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 5
-            failureThreshold: 2
           livenessProbe:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 10
-            failureThreshold: 3
           lifecycle:
             preStop:
               sleep: {seconds: 5}
@@ -74,11 +68,6 @@ spec:
         - name: tmp
           emptyDir: {sizeLimit: 64Mi}
         - name: tls
-          projected:
+          secret:
+            secretName: velocite-tls-nginx
             defaultMode: 0440
-            sources:
-              - secret:
-                  name: velocite-tls-nginx
-                  items:
-                    - {key: tls.crt, path: tls.crt}
-                    - {key: tls.key, path: tls.key}

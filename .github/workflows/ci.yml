@@ -1,13 +1,9 @@
 # ---------------------------------------------------------------------------
 # Intégration continue de velocite-ops.
 #
-# A FAIRE (atelier 2) : un job "images" qui, pour l'image du job batch :
-#   1. construit l'image (contexte app/services/batch) ;
-#   2. l'analyse avec Trivy et échoue sur toute vulnérabilité HIGH ou
-#      CRITICAL qui a un correctif publié (--ignore-unfixed) ;
-#   3. vérifie qu'elle ne tourne pas en root (docker image inspect).
-# Bonus, non attendu lundi : la même chose pour les autres images de app/
-# (une matrice évite de répéter le job).
+# Un job "images" pour l'image du job batch : construction, analyse de
+# vulnérabilités (bloquante sur HIGH et CRITICAL corrigeables), contrôle
+# de l'utilisateur. Correction de l'atelier 2.
 #
 # Règles de la chaîne, non négociables :
 #   - droits minimaux (permissions: contents: read) ;
@@ -40,4 +36,25 @@ jobs:
       - name: Outils
         run: bash scripts/ci/outils.sh trivy
 
-      # A FAIRE : construction, analyse, utilisateur.
+      - name: Construction
+        run: docker build -t velocite/batch:ci app/services/batch
+
+      # Politique : on bloque sur toute vulnérabilité HIGH ou CRITICAL qui a
+      # un correctif publié. Celles sans correctif sont listées, pas
+      # bloquantes (app/SECURITE.md, "Ce qui reste ouvert").
+      - name: Vulnérabilités corrigeables (bloquant)
+        run: >
+          trivy image --quiet
+          --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+          velocite/batch:ci
+
+      - name: Vulnérabilités sans correctif (pour information)
+        run: >
+          trivy image --quiet --skip-db-update --severity HIGH,CRITICAL
+          --format table velocite/batch:ci
+
+      - name: Le conteneur ne tourne pas en root
+        run: |
+          u=$(docker image inspect --format '{{.Config.User}}' velocite/batch:ci)
+          echo "utilisateur : ${u:-root}"
+          test "$u" = "10001:10001"

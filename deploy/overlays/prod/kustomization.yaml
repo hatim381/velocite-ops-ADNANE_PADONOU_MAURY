@@ -1,30 +1,40 @@
-# Environnement de production.
+# Environnement de production : plusieurs répliques, montée en charge
+# automatique de l'API, budget d'interruption, frontal sur
+# https://localhost:9443.
 #   kubectl apply -k deploy/overlays/prod
+#
+# Promotion : une version n'arrive ici qu'après avoir tourné en dev. Le tag
+# ci-dessous est le seul endroit où l'on choisit la version de prod.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namespace: velocite-prod
 
-# La version de l'API en service aujourd'hui.
+resources:
+  - ../../base
+  - disponibilite.yaml
+
+labels:
+  - pairs:
+      velocite.fr/env: prod
+    includeSelectors: false
+
 images:
   - name: velocite/api
     newTag: 2.2.0
 
-# Le frontal est publié sur localhost:9443 via le NodePort 30444.
-# L'API est gérée par l'autoscaler : le champ replicas de la base est retiré.
-
-resources:
-  - ../../base
-  - autoscaler.yaml
-  - budgets.yaml
-
 patches:
-  - path: nginx-service.yaml
-  - path: api-env.yaml
-  - path: replicas.yaml
-  - target:
-      kind: Deployment
-      name: api
+  - path: frontal.yaml
+  - path: api.yaml
+  - target: {kind: Deployment, name: api}
     patch: |-
+      # Le nombre de répliques de l'API appartient à l'autoscaler : si le
+      # manifeste le fixait aussi, chaque kubectl apply le remettrait à sa
+      # valeur et défairait le travail de l'autoscaler.
       - op: remove
         path: /spec/replicas
+  - target: {kind: Deployment, name: "(ingest|nginx)"}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2

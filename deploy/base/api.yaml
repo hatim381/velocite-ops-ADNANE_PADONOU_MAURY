@@ -1,8 +1,5 @@
 # L'API : comptes, trajets, statistiques, exports pseudonymisés.
 #
-# Ce manifeste est fourni complet : il sert de modèle pour ingest, nginx et
-# loadgen (atelier 5). Lisez-le ligne à ligne avant d'écrire les autres.
-#
 # Mise à jour progressive : un pod neuf de plus (maxSurge 1), aucun ancien
 # retiré avant que le neuf soit prêt (maxUnavailable 0). Une version qui ne
 # démarre pas reste bloquée sans couper le service : c'est l'atelier 6.
@@ -60,6 +57,9 @@ spec:
             - {name: S3_SECRET_KEY_FILE, value: /run/secrets/s3_api_secret}
             - {name: JWT_SECRET_FILE, value: /run/secrets/jwt_secret}
             - {name: PSEUDO_KEY_FILE, value: /run/secrets/pseudo_key}
+            # Obligatoire depuis la 2.2.0 (CHANGELOG) : sans elle, l'API sort
+            # en code 78 au démarrage. Ignorée par les versions antérieures.
+            - {name: TRIPS_CACHE_TTL, value: "60"}
           ports:
             - {name: http, containerPort: 8080}
             - {name: metriques, containerPort: 9100}

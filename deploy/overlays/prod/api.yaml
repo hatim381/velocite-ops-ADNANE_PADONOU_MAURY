@@ -1,0 +1,13 @@
+# Ce qui distingue l'API de prod : le nom de l'environnement, visible dans
+# /version et dans les logs. La liste env se fusionne par nom de variable.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          env:
+            - {name: VELOCITE_ENV, value: prod}

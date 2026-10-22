@@ -1,0 +1,31 @@
+Correction du J4 - les ateliers 1 à 6, version du cours, complète.
+
+AVANT de décompresser, gardez votre travail dans l'historique :
+  git add -A
+  git commit -m "Avant la correction du J4"
+  git pull --no-rebase --no-edit cours j4
+
+Puis décompressez ce fichier à la racine de votre dépôt ($DEPOT), en
+remplaçant les fichiers. Il remplace ou ajoute :
+  app/services/batch/Dockerfile          atelier 2, l'image du batch
+  .github/workflows/ci.yml               atelier 2, le job images
+  infra/00-cluster/main.tf, outputs.tf   atelier 3, le cluster
+  infra/20-env/modules/*/main.tf         atelier 4, les valeurs comprises
+  deploy/base/, deploy/overlays/dev/     atelier 5
+  deploy/overlays/prod/, base/api.yaml   atelier 6, la prod et la 2.2.0
+  scripts/verifier.ps1                   la vérification de chaque atelier
+  scripts/compter-bilan.ps1              la preuve de l'atelier 7
+  scripts/promtool.ps1                   les tests d'alertes de l'atelier 8
+
+Il ne touche pas à docs/ (votre rédaction) ni à scripts/up.ps1 (vendredi).
+
+Ensuite :
+  git add -A
+  git commit -m "Correction des ateliers 1 à 6"
+  git push
+  kubectl apply -k deploy/overlays/dev
+  kubectl apply -k deploy/overlays/prod
+  ./scripts/verifier.ps1 -Atelier 1,2,3,4,5,6      (macOS, Linux : pwsh devant)
+
+Ne lancez pas tofu apply sur infra/00-cluster : si votre cluster a été écrit
+autrement, OpenTofu le recréerait, et tout ce qu'il porte avec lui.

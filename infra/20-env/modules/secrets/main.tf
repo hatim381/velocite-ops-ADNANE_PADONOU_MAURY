@@ -4,10 +4,6 @@
 # Aucun secret n'est écrit dans le dépôt : ils naissent au premier apply,
 # vivent dans le state (chiffré) et dans des Secrets Kubernetes. Les noms de
 # clés sont ceux que les services lisent dans /run/secrets, comme en Compose.
-#
-# Atelier 4, version du cours (mercredi) : les deux Secrets sont écrits. Il
-# vous reste les valeurs marquées A_REMPLIR (entourées de deux soulignés de
-# chaque côté), chacune expliquée par le commentaire au-dessus d'elle.
 # ---------------------------------------------------------------------------
 
 terraform {
@@ -119,22 +115,14 @@ locals {
   }
 }
 
-# Atelier 4 : le Secret "velocite-db". Neuf clés.
-#   - cinq mots de passe, pris dans local.mdp : postgres_password,
-#     pg_svc_api, pg_svc_ingest, pg_svc_batch, pg_svc_seed ;
-#   - les quatre URL de connexion, déjà calculées plus haut dans un local
-#     (cherchez "database_url_").
-# merge() met deux tables bout à bout (slide 24 du J2).
 resource "kubernetes_secret_v1" "db" {
   metadata {
     name      = "velocite-db"
     namespace = var.namespace
   }
   data = merge(
-    # la liste des cinq noms, entre guillemets, séparés par des virgules
     { for k in ["postgres_password", "pg_svc_api", "pg_svc_ingest", "pg_svc_batch", "pg_svc_seed"] : k => local.mdp[k] },
-    # le nom du local qui contient les quatre URL
-    local.url_db
+    local.url_db,
   )
 }
 
@@ -154,20 +142,12 @@ resource "kubernetes_secret_v1" "redis" {
   }
 }
 
-# Atelier 4 : le Secret "velocite-app". Huit clés, de trois origines :
-#   - cinq mots de passe des comptes, dans local.mdp : admin_password,
-#     service_password, datasci_password, analyst_password, support_password ;
-#   - deux tokens, dans random_password.jetons : jwt_secret et
-#     ingest_device_key ;
-#   - une clé hexadécimale, dans random_id.hex32 : pseudo_key. Le Secret
-#     velocite-garage, juste en dessous, lit une clé de la même façon.
 resource "kubernetes_secret_v1" "app" {
   metadata {
     name      = "velocite-app"
     namespace = var.namespace
   }
   data = merge(
-    # la liste des cinq noms des comptes
     { for k in ["admin_password", "service_password", "datasci_password", "analyst_password", "support_password"] : k => local.mdp[k] },
     {
       jwt_secret        = random_password.jetons["jwt_secret"].result

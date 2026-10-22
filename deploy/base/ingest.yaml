@@ -1,4 +1,4 @@
-# Ingestion de la télémétrie des vélos.
+# L'ingestion de la télémétrie des véhicules.
 apiVersion: v1
 kind: Service
 metadata:
@@ -33,7 +33,6 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -61,11 +60,9 @@ spec:
           readinessProbe:
             httpGet: {path: /readyz, port: http}
             periodSeconds: 5
-            failureThreshold: 2
           livenessProbe:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 10
-            failureThreshold: 3
           lifecycle:
             preStop:
               sleep: {seconds: 5}

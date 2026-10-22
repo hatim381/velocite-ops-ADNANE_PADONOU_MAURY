@@ -1,5 +1,14 @@
-# A FAIRE (atelier 3) : trois sorties, lues par les couches suivantes et par
-# vous :
-#   contexte_kubectl  "kind-" suivi du nom du cluster
-#   endpoint          l'adresse de l'API Kubernetes
-#   kubeconfig_path   le fichier kubeconfig écrit par kind
+output "contexte_kubectl" {
+  description = "Contexte à passer à kubectl et aux autres couches."
+  value       = "kind-${kind_cluster.velocite.name}"
+}
+
+output "endpoint" {
+  description = "Adresse de l'API Kubernetes."
+  value       = kind_cluster.velocite.endpoint
+}
+
+output "kubeconfig_path" {
+  description = "Fichier kubeconfig écrit par kind."
+  value       = kind_cluster.velocite.kubeconfig_path
+}

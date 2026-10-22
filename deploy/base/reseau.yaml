@@ -9,6 +9,10 @@
 #   initialisation -> garage, postgres
 #   batch (Argo) -> postgres, garage, Pushgateway, API Kubernetes
 #   Prometheus (namespace observabilite) -> métriques 9100
+#
+# Pas de "egress: []" ni de "ingress: []" : policyTypes suffit à tout
+# refuser dans ce sens, et le serveur normalise la liste vide, si bien
+# que chaque kubectl apply verrait une modification.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -67,60 +71,6 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: redis
-spec:
-  podSelector:
-    matchLabels: {app.kubernetes.io/name: redis}
-  policyTypes: [Ingress, Egress]
-  ingress:
-    - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: api}}
-      ports:
-        - {port: 6379, protocol: TCP}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: garage
-spec:
-  podSelector:
-    matchLabels: {app.kubernetes.io/name: garage}
-  policyTypes: [Ingress, Egress]
-  ingress:
-    - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: api}}
-        - podSelector: {matchLabels: {app.kubernetes.io/name: batch}}
-        - podSelector: {matchLabels: {app.kubernetes.io/name: initialisation}}
-      ports:
-        - {port: 3900, protocol: TCP}
-    # L'API d'administration (clés, buckets) : l'initialisation seulement.
-    - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: initialisation}}
-      ports:
-        - {port: 3903, protocol: TCP}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: initialisation
-spec:
-  podSelector:
-    matchLabels: {app.kubernetes.io/name: initialisation}
-  policyTypes: [Egress]
-  egress:
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: garage}}
-      ports:
-        - {port: 3900, protocol: TCP}
-        - {port: 3903, protocol: TCP}
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: postgres}}
-      ports:
-        - {port: 5432, protocol: TCP}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
   name: ingest
 spec:
   podSelector:
@@ -172,11 +122,70 @@ spec:
     - from:
         - podSelector: {matchLabels: {app.kubernetes.io/name: api}}
         - podSelector: {matchLabels: {app.kubernetes.io/name: ingest}}
-        - podSelector: {matchLabels: {app.kubernetes.io/name: initialisation}}
         - podSelector: {matchLabels: {app.kubernetes.io/name: batch}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: initialisation}}
       ports:
         - {port: 5432, protocol: TCP}
 ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: redis}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: api}}
+      ports:
+        - {port: 6379, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: garage
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: garage}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: api}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: batch}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: initialisation}}
+      ports:
+        - {port: 3900, protocol: TCP}
+    # L'API d'administration (clés, buckets) : l'initialisation seulement.
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: initialisation}}
+      ports:
+        - {port: 3903, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: initialisation
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: initialisation}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: garage}}
+      ports:
+        - {port: 3900, protocol: TCP}
+        - {port: 3903, protocol: TCP}
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: postgres}}
+      ports:
+        - {port: 5432, protocol: TCP}
+---
+# Les pods du bilan quotidien (Argo Workflows). Leur conteneur "wait" écrit
+# le résultat de chaque étape dans l'API Kubernetes : il faut sortir vers
+# elle. Son adresse dépend du cluster (sur kind, le noeud de contrôle, port
+# 6443, derrière le Service kubernetes sur 443) : on ouvre ces deux ports,
+# hors du cluster des pods.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -184,7 +193,7 @@ metadata:
 spec:
   podSelector:
     matchLabels: {app.kubernetes.io/name: batch}
-  policyTypes: [Egress]
+  policyTypes: [Ingress, Egress]
   egress:
     - to:
         - podSelector: {matchLabels: {app.kubernetes.io/name: postgres}}
@@ -199,6 +208,10 @@ spec:
           podSelector: {matchLabels: {app.kubernetes.io/name: prometheus-pushgateway}}
       ports:
         - {port: 9091, protocol: TCP}
-    - ports:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.244.0.0/16]
+      ports:
         - {port: 443, protocol: TCP}
         - {port: 6443, protocol: TCP}
