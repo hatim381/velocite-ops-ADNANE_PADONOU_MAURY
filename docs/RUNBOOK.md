@@ -80,3 +80,53 @@ l'overlay prod, puis en appliquant et testant prod de la même manière.
 
 <a id="reprise-du-bilan"></a>
 ## Reprise du bilan quotidien
+
+### Ce qu'on voit
+
+L'alerte `BilanEchoue` est déclenchée, ou `BilanEnRetard` indique qu'aucun
+bilan réussi n'a été publié depuis plus de 26 heures. Le statut du dernier
+workflow peut être `Failed` ou `Error` ; l'étape `signaler` publie ce statut
+dans la Pushgateway même si le pipeline s'est arrêté avant `publish`.
+
+### Vérifier
+
+Lister d'abord les exécutions, puis examiner celle en échec. Les logs des pods
+réussis sont supprimés par Argo, il faut donc suivre les logs pendant un essai
+ou utiliser Loki quand il est disponible.
+
+```powershell
+argo -n velocite-dev list
+argo -n velocite-dev get NOM_DU_WORKFLOW
+argo -n velocite-dev logs NOM_DU_WORKFLOW
+kubectl -n velocite-dev get cronworkflow bilan-quotidien -o yaml
+kubectl -n velocite-dev get pods
+```
+
+Un code 75 signifie une panne temporaire : l'étape doit être réessayée jusqu'à
+trois fois avec un délai croissant. Un code 2 signale une donnée invalide et un
+code 78 une configuration absente : les relancer ne peut pas corriger la cause.
+
+### Agir
+
+Corriger la cause avant toute relance (par exemple la connectivité vers
+PostgreSQL ou Garage pour un code 75, ou la donnée source pour un code 2), puis
+lancer le bilan pour le jour concerné. Ne pas contourner le mutex : une seconde
+exécution attend naturellement la fin de celle qui est en cours.
+
+```powershell
+kubectl -n velocite-dev apply -f workflows
+argo -n velocite-dev submit --from workflowtemplate/bilan-quotidien -p date=2026-03-12
+argo -n velocite-dev logs '@latest' --follow
+```
+
+### Confirmer
+
+Le workflow doit finir en `Succeeded`, l'étape `signaler` doit avoir été
+exécutée, et le nombre de lignes du jour ne doit pas augmenter si le bilan est
+rejoué : les étapes sont idempotentes.
+
+```powershell
+argo -n velocite-dev get '@latest'
+./scripts/compter-bilan.ps1 -Date 2026-03-12 -Env dev
+kubectl -n velocite-dev get cronworkflow bilan-quotidien
+```

@@ -24,6 +24,16 @@ metadata:
   name: bilan-quotidien
 spec:
   entrypoint: bilan
+  # Signale le résultat, y compris quand une étape a échoué ou que le délai
+  # maximal est atteint.
+  onExit: signaler
+  # Un bilan bloqué doit finir par échouer et être visible par la supervision.
+  activeDeadlineSeconds: 1800
+  # Les lancements manuels et le CronWorkflow partagent ce verrou dans un
+  # namespace : le même jour ne peut jamais être traité en parallèle.
+  synchronization:
+    mutexes:
+      - name: bilan-quotidien
   serviceAccountName: bilan
   # Le jeton Kubernetes ne va qu'aux conteneurs d'Argo (init, wait), pas au
   # code du batch, qui n'en a pas l'usage. Sans cela, Kubernetes le
@@ -85,22 +95,43 @@ spec:
 
   templates:
     - name: bilan
-      # A FAIRE : un DAG de quatre tâches (extract, check, aggregate,
-      # publish), chacune appelant le template `etape` avec son paramètre
-      # "commande", chacune dépendant de la précédente.
-      steps:
-        - - name: extract
+      dag:
+        tasks:
+          - name: extract
             template: etape
             arguments:
               parameters: [{name: commande, value: extract}]
+          - name: check
+            template: etape
+            depends: extract.Succeeded
+            arguments:
+              parameters: [{name: commande, value: check}]
+          - name: aggregate
+            template: etape
+            depends: check.Succeeded
+            arguments:
+              parameters: [{name: commande, value: aggregate}]
+          - name: publish
+            template: etape
+            depends: aggregate.Succeeded
+            arguments:
+              parameters: [{name: commande, value: publish}]
 
     # Une étape du job.
     - name: etape
       inputs:
         parameters:
           - name: commande
-      # A FAIRE : la stratégie de relance (retryStrategy). Combien d'essais,
-      # à quel rythme, et surtout pour quels codes de sortie.
+      # Une donnée invalide (2) ou une configuration absente (78) exige une
+      # intervention humaine. Seule une panne temporaire (75) est relancée.
+      retryStrategy:
+        limit: "3"
+        retryPolicy: OnFailure
+        expression: "asInt(lastRetry.exitCode) == 75"
+        backoff:
+          duration: "30s"
+          factor: "2"
+          maxDuration: "10m"
       container:
         image: velocite/batch:1.0.0
         imagePullPolicy: IfNotPresent

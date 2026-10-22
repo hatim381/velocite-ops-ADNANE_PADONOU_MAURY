@@ -1,13 +1,16 @@
-# A FAIRE (atelier 7) : le déclenchement quotidien du bilan.
-#
-# Un CronWorkflow nommé bilan-quotidien, qui lance le WorkflowTemplate du
-# même nom :
-#   - tous les jours à 2 h 30, heure de Paris, changements d'heure compris ;
-#   - jamais deux exécutions qui se chevauchent ;
-#   - si le cluster était éteint à l'heure dite, rattrapage dans l'heure,
-#     pas au-delà ;
-#   - un historique court (quelques succès, un peu plus d'échecs).
-#
-# Documentation : https://argo-workflows.readthedocs.io/en/latest/cron-workflows/
-# Attention : depuis Argo Workflows 4, le champ s'appelle "schedules" (une
-# liste), plus "schedule".
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: bilan-quotidien
+spec:
+  # Argo 4 attend une liste, même pour un seul calendrier.
+  schedules: ["30 2 * * *"]
+  timezone: "Europe/Paris"
+  concurrencyPolicy: Forbid
+  # Un cluster arrêté ne rattrape le lancement que pendant une heure.
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 4
+  workflowSpec:
+    workflowTemplateRef:
+      name: bilan-quotidien

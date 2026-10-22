@@ -42,4 +42,15 @@ le modifie.
 
 ## Le bilan quotidien
 
+| Paramètre | Valeur | Où | Rôle |
+|---|---|---|---|
+| Calendrier | `30 2 * * *` | `workflows/cron-bilan.yaml` | Lance le bilan chaque jour à 02:30. |
+| Fuseau horaire | `Europe/Paris` | `workflows/cron-bilan.yaml` | Suit automatiquement les changements d'heure. |
+| Chevauchement | `Forbid` et mutex `bilan-quotidien` | CronWorkflow et WorkflowTemplate | Empêche deux bilans simultanés, y compris un lancement manuel. |
+| Rattrapage | `3600` secondes | `workflows/cron-bilan.yaml` | Rattrape un lancement manqué pendant une heure au plus. |
+| Durée maximale | `1800` secondes | `workflows/bilan-quotidien.yaml` | Met fin à un bilan bloqué, qui est alors signalé. |
+| Relances | 3 essais, code 75 seulement | `workflows/bilan-quotidien.yaml` | Réessaie les pannes temporaires après 30 s, 60 s puis 120 s. |
+| Injection de panne | `BATCH_FAIL_RATE="0"` | `workflows/bilan-quotidien.yaml` | Reste désactivée hors exercice de relance. |
+| Conservation Argo | 2 succès, 4 échecs | `workflows/cron-bilan.yaml` | Garde un historique court pour l'enquête. |
+
 ## Les alertes
