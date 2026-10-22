@@ -77,3 +77,46 @@ tests:
               summary: "La mise à jour de api n'avance plus dans velocite-prod"
               description: "Les nouveaux pods ne deviennent pas prêts. Les anciens servent toujours. Lire les logs du nouveau pod, puis décider : corriger ou revenir en arrière."
               runbook: docs/RUNBOOK.md#retour-arriere
+
+  - name: disponibilité du client témoin dégradée par route
+    interval: 1m
+    input_series:
+      - series: 'velocite_client_requests_total{namespace="velocite-dev", route="/api/stats/regions", code="200"}'
+        values: '0+100x12'
+      - series: 'velocite_client_requests_total{namespace="velocite-dev", route="/api/stats/regions", code="504"}'
+        values: '0x4 0+3x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: DisponibiliteClientDegradee
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: DisponibiliteClientDegradee
+        exp_alerts:
+          - exp_labels:
+              severity: critique
+              namespace: velocite-dev
+              route: /api/stats/regions
+            exp_annotations:
+              summary: "La disponibilité de /api/stats/regions est inférieure à 99 % dans velocite-dev"
+              description: "Le client témoin voit plus de 1 % d'échecs sur cinq minutes. Vérifier nginx et l'API, puis les codes par route dans Prometheus."
+              runbook: docs/RUNBOOK.md#disponibilite-client-degradee
+
+  - name: salve d'exports data science
+    interval: 1m
+    input_series:
+      - series: 'velocite_rows_exported_total{namespace="velocite-prod", role="datascientist"}'
+        values: '0x4 0+600x8'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SalveExportsDataScience
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: SalveExportsDataScience
+        exp_alerts:
+          - exp_labels:
+              severity: avertissement
+              namespace: velocite-prod
+            exp_annotations:
+              summary: "Plus de 1 000 lignes ont été exportées par data science dans velocite-prod"
+              description: "Vérifier la demande d'analyse, le volume exporté et les journaux d'accès avant de considérer la salve comme attendue."
+              runbook: docs/RUNBOOK.md#salve-exports-data-science

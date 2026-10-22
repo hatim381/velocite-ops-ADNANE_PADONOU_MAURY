@@ -54,3 +54,14 @@ le modifie.
 | Conservation Argo | 2 succès, 4 échecs | `workflows/cron-bilan.yaml` | Garde un historique court pour l'enquête. |
 
 ## Les alertes
+
+| Alerte | Seuil et durée | Où | Réponse |
+|---|---|---|---|
+| `DisponibiliteClientDegradee` | Plus de 1 % d'échecs par route pendant 2 min | `observability/regles/alertes.yaml` | Vérifier nginx, API et les codes vus par le client témoin. |
+| `SalveExportsDataScience` | Plus de 1 000 lignes exportées en 5 min, puis 1 min | `observability/regles/alertes.yaml` | Confirmer que la demande data science est attendue. |
+| `BilanEchoue` | Dernier statut du bilan à 0 | Pushgateway et règles Prometheus | Suivre le runbook du bilan, sans relance aveugle d'un code 2. |
+| `BilanEnRetard` | Aucun succès depuis 26 h | Pushgateway et règles Prometheus | Vérifier le CronWorkflow et l'état du dernier bilan. |
+
+Les règles et leurs tests sont versionnés dans `observability/`. Prometheus les
+relit environ une minute après un `tofu apply`; les seuils ne sont donc pas
+modifiés directement dans l'interface web.

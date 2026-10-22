@@ -20,6 +20,97 @@ porte une ancre explicite, sans accent, que GitHub ne modifie pas.
 <a id="service-indisponible"></a>
 ## Service indisponible
 
+### Ce qu'on voit
+
+L'alerte indique qu'un déploiement n'a plus aucun pod prêt. Les clients peuvent
+voir des erreurs 5xx ou des délais d'attente sur les routes exposées.
+
+### Vérifier
+
+```powershell
+kubectl -n velocite-dev get pods
+kubectl -n velocite-dev describe deployment/api
+kubectl -n velocite-dev get events --sort-by=.lastTimestamp
+```
+
+### Agir
+
+Corriger la cause identifiée (configuration, image ou dépendance), puis
+réappliquer le manifeste versionné. Ne pas modifier le déploiement à la main.
+
+### Confirmer
+
+```powershell
+kubectl -n velocite-dev rollout status deployment/api
+./scripts/smoke.ps1 -Env dev
+```
+
+---
+
+<a id="disponibilite-client-degradee"></a>
+## Disponibilité client dégradée
+
+### Ce qu'on voit
+
+Le client témoin observe plus de 1 % d'échecs sur une route pendant au moins
+deux minutes. Cette alerte mesure le service tel qu'il est reçu par le client,
+pas uniquement l'état interne des pods.
+
+### Vérifier
+
+```powershell
+kubectl -n observabilite port-forward svc/prometheus-server 9090:80
+# Dans Prometheus : sum by (route) (rate(velocite_client_requests_total{namespace="velocite-dev",code=~"5..|erreur"}[5m])) / sum by (route) (rate(velocite_client_requests_total{namespace="velocite-dev"}[5m]))
+kubectl -n velocite-dev get pods
+```
+
+### Agir
+
+Identifier la route et les codes en erreur, puis vérifier nginx, l'API et leurs
+dépendances. Restaurer le déploiement ou la dépendance fautive avant de relancer
+les clients.
+
+### Confirmer
+
+Après cinq minutes sans nouvel échec, l'alerte repasse à `inactive` et le
+tableau Grafana affiche une disponibilité supérieure ou égale à 99 %.
+
+### Exercice du 22 octobre 2026
+
+Sur `velocite-dev`, l'API a été arrêtée à 15:06:34 puis remise à un replica à
+15:09:33 (heure de Paris). L'alerte est passée à `pending` à 15:07:27, à
+`firing` à 15:09:57, puis à `inactive` à 15:15:27. Ce délai après le retour
+est normal : la fenêtre de cinq minutes contient encore les erreurs précédentes.
+
+---
+
+<a id="salve-exports-data-science"></a>
+## Salve d'exports data science
+
+### Ce qu'on voit
+
+Plus de 1 000 lignes ont été exportées par le compte `datascientist` en cinq
+minutes. Ce peut être une analyse prévue, mais le volume doit être justifié.
+
+### Vérifier
+
+```powershell
+kubectl -n observabilite port-forward svc/prometheus-server 9090:80
+# Dans Prometheus : increase(velocite_rows_exported_total{namespace="velocite-dev",role="datascientist"}[5m])
+```
+
+Comparer la salve à la demande d'analyse et aux logs d'accès de l'API.
+
+### Agir
+
+Si l'export n'est pas attendu, suspendre le compte ou son jeton selon la
+procédure d'accès, puis préserver les journaux nécessaires à l'enquête.
+
+### Confirmer
+
+Le volume cesse d'augmenter ; l'alerte redevient `inactive` après la fenêtre de
+cinq minutes et la période `for`.
+
 ---
 
 <a id="retour-arriere"></a>

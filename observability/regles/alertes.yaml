@@ -40,6 +40,35 @@ groups:
           description: "Les nouveaux pods ne deviennent pas prêts. Les anciens servent toujours. Lire les logs du nouveau pod, puis décider : corriger ou revenir en arrière."
           runbook: docs/RUNBOOK.md#retour-arriere
 
+      # La disponibilité réellement vécue par le client témoin, route par
+      # route. Les 5xx et les erreurs réseau comptent comme des échecs.
+      - alert: DisponibiliteClientDegradee
+        expr: |
+          (
+            sum by (namespace, route) (rate(velocite_client_requests_total{code=~"5..|erreur"}[5m]))
+            /
+            sum by (namespace, route) (rate(velocite_client_requests_total[5m]))
+          ) > 0.01
+        for: 2m
+        labels:
+          severity: critique
+        annotations:
+          summary: "La disponibilité de {{ $labels.route }} est inférieure à 99 % dans {{ $labels.namespace }}"
+          description: "Le client témoin voit plus de 1 % d'échecs sur cinq minutes. Vérifier nginx et l'API, puis les codes par route dans Prometheus."
+          runbook: docs/RUNBOOK.md#disponibilite-client-degradee
+
+      # Une salve d'exports est visible même si l'API reste disponible : elle
+      # peut être légitime, mais mérite une vérification de l'usage du compte.
+      - alert: SalveExportsDataScience
+        expr: sum by (namespace) (increase(velocite_rows_exported_total{role="datascientist"}[5m])) > 1000
+        for: 1m
+        labels:
+          severity: avertissement
+        annotations:
+          summary: "Plus de 1 000 lignes ont été exportées par data science dans {{ $labels.namespace }}"
+          description: "Vérifier la demande d'analyse, le volume exporté et les journaux d'accès avant de considérer la salve comme attendue."
+          runbook: docs/RUNBOOK.md#salve-exports-data-science
+
   # Fournies : elles lisent l'issue que l'étape signaler du bilan dépose dans
   # la Pushgateway (workflows/bilan-quotidien.yaml).
   - name: velocite-bilan

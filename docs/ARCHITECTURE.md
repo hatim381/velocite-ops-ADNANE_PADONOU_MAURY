@@ -120,6 +120,18 @@ est d'abord validée en dev avant que le tag de l'overlay prod ne soit modifié.
 
 ## La supervision
 
+Prometheus collecte les métriques des services annotés et du client témoin ;
+celui-ci mesure les réponses reçues, donc les pannes réseau et les 5xx que la
+seule santé des pods ne révèle pas. Les règles d'alerte et d'enregistrement
+sont des fichiers versionnés puis fournis à Prometheus par OpenTofu.
+
+Grafana reçoit le même Prometheus comme source de données. Son tableau
+VéloCité est un JSON du dépôt injecté par ConfigMap : les panneaux restent
+reproductibles lors d'une reconstruction. L'alerte associe un résumé, une
+sévérité et une ancre de runbook ; Alertmanager n'a volontairement pas de
+canal de notification dans cet exercice, les alertes sont lues dans son
+interface.
+
 ## Les choix et ce qu'on a écarté
 
 | Choix | Écarté | Pourquoi |
