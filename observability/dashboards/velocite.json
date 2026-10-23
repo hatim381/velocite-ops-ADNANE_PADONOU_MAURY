@@ -192,8 +192,8 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Disponibilité par route",
-      "description": "Part d'appels réussis vue par le client témoin sur les cinq dernières minutes.",
+      "title": "Disponibilité par route (client témoin)",
+      "description": "Part des appels réussis, vue par le client témoin, sur 5 minutes. 1 : tout passe ; sous 0,99 : l'objectif n'est pas tenu.",
       "gridPos": {
         "x": 12,
         "y": 4,
@@ -211,7 +211,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "1 - (sum by (route) (rate(velocite_client_requests_total{namespace=\"$namespace\", code=~\"5..|erreur\"}[5m])) / sum by (route) (rate(velocite_client_requests_total{namespace=\"$namespace\"}[5m])))",
+          "expr": "sum by (route) (rate(velocite_client_requests_total{namespace=\"$namespace\", code!~\"5..|erreur\"}[5m]))\n  / sum by (route) (rate(velocite_client_requests_total{namespace=\"$namespace\"}[5m]))",
           "legendFormat": "{{route}}"
         }
       ],
@@ -228,14 +228,15 @@
                 "value": null
               },
               {
-                "color": "orange",
-                "value": 0.99
-              },
-              {
                 "color": "green",
-                "value": 0.999
+                "value": 0.99
               }
             ]
+          },
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            }
           }
         },
         "overrides": []
@@ -244,9 +245,12 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
         }
       }
     }
   ],
-  "description": "Tableau d'exploitation versionné : disponibilité des services et disponibilité vue par le client témoin, par route."
+  "description": "Tableau de l'exploitation : l'état des pods, la version, la télémétrie et la disponibilité par route vue par le client témoin."
 }

@@ -6,14 +6,14 @@
 # Chaque étape est un pod de l'image velocite/batch. Le cron de la v1 lançait
 # les quatre commandes à la suite et ne savait rien de leurs échecs.
 #
-# A FAIRE (atelier 7) : faire décider ce fichier, et non plus un humain :
-#   1. l'ordre des étapes, et l'arrêt au premier échec (template "bilan") ;
-#   2. la relance automatique, seulement quand elle a un sens : lisez les
-#      codes de sortie en tête de app/services/batch/batch.py ;
-#   3. jamais deux bilans en même temps dans un namespace ;
-#   4. l'issue publiée pour la supervision, succès comme échec (le template
-#      "signaler" existe déjà : il reste à le déclencher toujours) ;
-#   5. une durée maximale.
+# Ce que ce fichier décide, et que le cron de la v1 ne savait pas faire
+# (correction de l'atelier 7) :
+#   1. l'ordre des étapes, et l'arrêt au premier échec : un DAG ;
+#   2. la relance automatique, seulement quand elle a un sens (code 75 :
+#      panne temporaire), avec un délai qui double à chaque essai ;
+#   3. jamais deux bilans en même temps dans un namespace : un mutex ;
+#   4. l'issue publiée pour la supervision, succès comme échec : onExit ;
+#   5. une durée maximale : un bilan bloqué finit par échouer, et se voit.
 #
 # Lancer à la main, pour une date donnée :
 #   argo -n velocite-dev submit --from workflowtemplate/bilan-quotidien -p date=2026-03-12 --watch
@@ -24,17 +24,15 @@ metadata:
   name: bilan-quotidien
 spec:
   entrypoint: bilan
-  # Signale le résultat, y compris quand une étape a échoué ou que le délai
-  # maximal est atteint.
+  serviceAccountName: bilan
+  # 4. Toujours exécuté, réussite ou échec : dépose l'issue du bilan.
   onExit: signaler
-  # Un bilan bloqué doit finir par échouer et être visible par la supervision.
-  activeDeadlineSeconds: 1800
-  # Les lancements manuels et le CronWorkflow partagent ce verrou dans un
-  # namespace : le même jour ne peut jamais être traité en parallèle.
+  # 5. Au-delà d'une heure, le bilan est arrêté en échec (et onExit le dit).
+  activeDeadlineSeconds: 3600
+  # 3. Un bilan relancé à la main attend celui de la nuit.
   synchronization:
     mutexes:
       - name: bilan-quotidien
-  serviceAccountName: bilan
   # Le jeton Kubernetes ne va qu'aux conteneurs d'Argo (init, wait), pas au
   # code du batch, qui n'en a pas l'usage. Sans cela, Kubernetes le
   # monterait dans /run/secrets/kubernetes.io, à l'intérieur du volume des
@@ -95,6 +93,8 @@ spec:
 
   templates:
     - name: bilan
+      # 1. Quatre tâches en chaîne : chacune attend que la précédente ait
+      # réussi ; un échec arrête la suite.
       dag:
         tasks:
           - name: extract
@@ -102,18 +102,18 @@ spec:
             arguments:
               parameters: [{name: commande, value: extract}]
           - name: check
+            depends: extract
             template: etape
-            depends: extract.Succeeded
             arguments:
               parameters: [{name: commande, value: check}]
           - name: aggregate
+            depends: check
             template: etape
-            depends: check.Succeeded
             arguments:
               parameters: [{name: commande, value: aggregate}]
           - name: publish
+            depends: aggregate
             template: etape
-            depends: aggregate.Succeeded
             arguments:
               parameters: [{name: commande, value: publish}]
 
@@ -122,8 +122,10 @@ spec:
       inputs:
         parameters:
           - name: commande
-      # Une donnée invalide (2) ou une configuration absente (78) exige une
-      # intervention humaine. Seule une panne temporaire (75) est relancée.
+      # 2. Le code de sortie décide de la suite :
+      #   75 panne temporaire : relance, jusqu'à 3 fois (30 s, 1 min, 2 min) ;
+      #   2 donnée invalide, 78 configuration : arrêt immédiat, relancer
+      #   produirait le même résultat. Il faut un humain (RUNBOOK).
       retryStrategy:
         limit: "3"
         retryPolicy: OnFailure

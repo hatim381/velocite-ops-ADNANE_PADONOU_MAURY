@@ -1,16 +1,24 @@
+# Le déclenchement quotidien du bilan (correction de l'atelier 7) :
+# 2 h 30, heure de Paris, changements d'heure compris. Si le précédent tourne
+# encore, on ne double pas (Forbid). Si le cluster était éteint à l'heure
+# dite, on rattrape dans l'heure qui suit, pas au-delà.
+#
+#   argo -n velocite-dev cron list
+#   argo -n velocite-dev cron suspend bilan-quotidien     (maintenance)
+#   argo -n velocite-dev cron resume bilan-quotidien
+#
+# Depuis Argo Workflows 4, le champ s'appelle "schedules" (une liste).
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
   name: bilan-quotidien
 spec:
-  # Argo 4 attend une liste, même pour un seul calendrier.
   schedules: ["30 2 * * *"]
-  timezone: "Europe/Paris"
+  timezone: Europe/Paris
   concurrencyPolicy: Forbid
-  # Un cluster arrêté ne rattrape le lancement que pendant une heure.
   startingDeadlineSeconds: 3600
-  successfulJobsHistoryLimit: 2
-  failedJobsHistoryLimit: 4
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
   workflowSpec:
     workflowTemplateRef:
       name: bilan-quotidien

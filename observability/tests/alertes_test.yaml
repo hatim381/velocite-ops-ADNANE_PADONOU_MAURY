@@ -2,8 +2,8 @@
 # les alertes attendues à un instant donné.
 #   promtool test rules observability/tests/alertes_test.yaml
 #
-# A FAIRE (atelier 8) : un test par alerte ajoutée. Un test qui prouve que
-# l'alerte part quand il faut, et qu'elle ne part pas quand il ne faut pas.
+# Correction de l'atelier 8 : un test par alerte ajoutée, chacun prouve
+# qu'elle part quand il faut, et qu'elle ne part pas sinon.
 
 rule_files:
   - ../regles/enregistrement.yaml
@@ -78,45 +78,52 @@ tests:
               description: "Les nouveaux pods ne deviennent pas prêts. Les anciens servent toujours. Lire les logs du nouveau pod, puis décider : corriger ou revenir en arrière."
               runbook: docs/RUNBOOK.md#retour-arriere
 
-  - name: disponibilité du client témoin dégradée par route
+  # La route /api/login : 60 appels réussis par minute, puis, à partir de
+  # la 6e minute, 30 échecs par minute (33 % d'erreurs).
+  - name: disponibilité par route sous l'objectif
     interval: 1m
     input_series:
-      - series: 'velocite_client_requests_total{namespace="velocite-dev", route="/api/stats/regions", code="200"}'
-        values: '0+100x12'
-      - series: 'velocite_client_requests_total{namespace="velocite-dev", route="/api/stats/regions", code="504"}'
-        values: '0x4 0+3x8'
+      - series: 'velocite_client_requests_total{namespace="velocite-dev", route="/api/login", code="200"}'
+        values: '0+60x20'
+      - series: 'velocite_client_requests_total{namespace="velocite-dev", route="/api/login", code="erreur"}'
+        values: '0x5 30+30x14'
+      - series: 'velocite_client_requests_total{namespace="velocite-dev", route="/ingest/telemetry/batch", code="200"}'
+        values: '0+600x20'
     alert_rule_test:
-      - eval_time: 3m
-        alertname: DisponibiliteClientDegradee
+      - eval_time: 5m
+        alertname: DisponibiliteSousObjectif
         exp_alerts: []
-      - eval_time: 9m
-        alertname: DisponibiliteClientDegradee
+      - eval_time: 12m
+        alertname: DisponibiliteSousObjectif
         exp_alerts:
           - exp_labels:
               severity: critique
               namespace: velocite-dev
-              route: /api/stats/regions
+              route: /api/login
             exp_annotations:
-              summary: "La disponibilité de /api/stats/regions est inférieure à 99 % dans velocite-dev"
-              description: "Le client témoin voit plus de 1 % d'échecs sur cinq minutes. Vérifier nginx et l'API, puis les codes par route dans Prometheus."
-              runbook: docs/RUNBOOK.md#disponibilite-client-degradee
+              summary: "velocite-dev : plus de 1 % d'échecs sur /api/login, vus par le client témoin"
+              description: "Le tableau de bord VéloCité, panneau disponibilité ; puis kubectl -n velocite-dev get pods et les logs du frontal."
+              runbook: docs/RUNBOOK.md#service-indisponible
 
-  - name: salve d'exports data science
+  # 200 lignes par minute : 2000 en 10 min, sous le seuil ; puis une salve de
+  # 1000 lignes par minute : plus de 5000 en 10 min.
+  - name: salve d'extraction data science
     interval: 1m
     input_series:
       - series: 'velocite_rows_exported_total{namespace="velocite-prod", role="datascientist"}'
-        values: '0x4 0+600x8'
+        values: '0+200x10 2000+1000x10'
     alert_rule_test:
-      - eval_time: 3m
-        alertname: SalveExportsDataScience
+      - eval_time: 10m
+        alertname: ExtractionMassive
         exp_alerts: []
-      - eval_time: 9m
-        alertname: SalveExportsDataScience
+      - eval_time: 20m
+        alertname: ExtractionMassive
         exp_alerts:
           - exp_labels:
               severity: avertissement
               namespace: velocite-prod
+              role: datascientist
             exp_annotations:
-              summary: "Plus de 1 000 lignes ont été exportées par data science dans velocite-prod"
-              description: "Vérifier la demande d'analyse, le volume exporté et les journaux d'accès avant de considérer la salve comme attendue."
-              runbook: docs/RUNBOOK.md#salve-exports-data-science
+              summary: "Plus de 5000 lignes exportées en 10 min par le rôle datascientist (velocite-prod)"
+              description: "L'export est autorisé, son volume ne l'est pas forcément. Qui, quand, pour quoi : vérifier avec l'équipe data avant de conclure."
+              runbook: docs/RUNBOOK.md#extraction-massive

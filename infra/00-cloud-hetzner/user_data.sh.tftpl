@@ -1,0 +1,37 @@
+#!/bin/bash
+# Exécuté une fois, au premier démarrage de la machine (cloud-init).
+# Attention : chez Hetzner, une machine éteinte reste facturée. La fin de vie
+# passe par scripts/cloud.ps1 -Etape detruire, jamais par une extinction.
+set -euo pipefail
+
+# 1. Docker, pour construire les images VéloCité sur la machine.
+apt-get update -q
+apt-get install -y -q docker.io
+
+# 2. L'adresse publique, lue dans les métadonnées de Hetzner, pour le
+#    certificat de l'API Kubernetes.
+IP=$(curl -sS http://169.254.169.254/hetzner/v1/metadata/public-ipv4)
+
+# 3. Atelier 11, pièce 3 sur 3 : installer k3s (Fiche_Atelier11_J5, étape 3).
+#    La commande est déjà écrite. Trois endroits à compléter sont marqués en
+#    majuscules : remplacez chaque marque, sans toucher au reste. Les options déjà écrites retirent Traefik et le répartiteur
+#    intégré : VéloCité a son propre frontal, publié en NodePort comme sur kind.
+#
+#    3.a La version de k3s, épinglée : ne l'écrivez pas en dur. OpenTofu la
+#        passe à ce fichier sous le nom version_k3s (calcul.tf, 2.g) ; dans
+#        un fichier .tftpl, une valeur passée par templatefile s'écrit
+#        $${nom}. Gardez les guillemets.
+#    3.b Le certificat de l'API doit valoir pour l'adresse publique de la
+#        machine, sinon kubectl le refuse : la variable shell de l'étape 2,
+#        écrite $NOM, entre guillemets.
+curl -sfL https://get.k3s.io | \
+  INSTALL_K3S_VERSION="A FAIRE" sh -s - server \
+  --tls-san "A FAIRE" \
+  --disable traefik \
+  --disable servicelb \
+  --write-kubeconfig-mode 0600
+
+#    3.c Le fichier témoin : scripts/cloud.ps1 attend, toutes les 15
+#        secondes, que /var/lib/velocite-pret existe pour savoir que la
+#        machine est prête. Une commande Linux qui crée un fichier vide.
+A FAIRE

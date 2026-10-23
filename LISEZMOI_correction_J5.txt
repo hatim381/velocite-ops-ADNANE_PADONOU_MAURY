@@ -1,0 +1,47 @@
+Correction du J5 - les ateliers 1 à 8, version du cours, complète.
+
+AVANT de décompresser, gardez votre travail dans l'historique :
+  git add -A
+  git commit -m "Avant la correction du J5"
+  git pull --no-rebase --no-edit cours j5
+
+Si git pull annonce CONFLICT sur scripts/verifier.ps1 : c'est attendu (vous
+n'avez pas fait le git pull de jeudi après-midi). Continuez : ce fichier
+remplace le vôtre, puis git add -A et git commit terminent la fusion.
+
+Puis décompressez ce fichier à la racine de votre dépôt ($DEPOT), en
+remplaçant les fichiers. Il remplace ou ajoute :
+  app/services/batch/Dockerfile          atelier 2, l'image du batch
+  .github/workflows/ci.yml               atelier 2, le job images
+  infra/00-cluster/main.tf, outputs.tf   atelier 3, le cluster
+  infra/20-env/modules/*/main.tf         atelier 4, les valeurs comprises
+  deploy/base/, deploy/overlays/dev/     atelier 5
+  deploy/overlays/prod/, base/api.yaml   atelier 6, la prod et la 2.2.0
+  workflows/bilan-quotidien.yaml         atelier 7, le bilan
+  workflows/cron-bilan.yaml              atelier 7, le calendrier
+  observability/regles/alertes.yaml      atelier 8, les alertes
+  observability/tests/alertes_test.yaml  atelier 8, leurs tests
+  observability/dashboards/velocite.json atelier 8, le panneau de disponibilité
+  scripts/verifier.ps1                   la vérification de chaque atelier, 1 à 11
+  scripts/compter-bilan.ps1              la preuve de l'atelier 7
+  scripts/promtool.ps1                   les tests d'alertes de l'atelier 8
+
+Il ne touche pas à docs/ (votre rédaction), ni à scripts/up.ps1 (terminé le
+30 novembre au matin), ni à observability/regles/enregistrement.yaml (que le
+git pull de ce matin apporte, pour l'atelier 9).
+
+Ensuite :
+  git add -A
+  git commit -m "Correction des ateliers 1 à 8"
+  git push
+  kubectl apply -k deploy/overlays/dev
+  kubectl apply -k deploy/overlays/prod
+  kubectl -n velocite-dev apply -f workflows
+  tofu -chdir=infra/10-outils apply      (poste léger : -var=leger=true)
+  ./scripts/verifier.ps1 -Atelier 7,8    (macOS, Linux : pwsh devant)
+
+tofu apply sur infra/10-outils recharge les alertes et le tableau de bord
+corrigés (la phrase du state dans le terminal, puis yes). Ne lancez pas
+tofu apply sur infra/00-cluster ce matin : si votre cluster a été écrit
+autrement, OpenTofu le recréerait, avec les données de la base. L'atelier 10
+vous apprend justement à sauvegarder ces données avant de tout recréer.

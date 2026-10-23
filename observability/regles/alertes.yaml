@@ -7,14 +7,10 @@
 #   description   ce qu'on regarde en premier
 #   runbook       la section de docs/RUNBOOK.md à suivre
 #
-# A FAIRE (atelier 8) : au moins deux alertes de plus.
-#   1. Une alerte sur objectif de service (SLO) : 99 % des appels du client
-#      témoin (métrique velocite_client_requests_total, port 9100 du
-#      loadgen) réussissent. Une erreur est un code 5xx ou "erreur".
-#   2. Une alerte qui rend visible la salve d'extraction du compte data
-#      science (métrique velocite_rows_exported_total{role="datascientist"}).
-# Chaque alerte ajoutée a son test dans observability/tests/.
-# Vérifier : promtool check rules observability/regles/alertes.yaml
+# Ajoutées à l'atelier 8 (correction) : la disponibilité vue par le client
+# témoin, par route, et la salve d'extraction du compte data science.
+# Chaque alerte a son test dans observability/tests/alertes_test.yaml.
+# Vérifier : ./scripts/promtool.ps1 check rules observability/regles/alertes.yaml
 
 groups:
   - name: velocite-service
@@ -29,6 +25,25 @@ groups:
           description: "kubectl -n {{ $labels.namespace }} get pods ; kubectl -n {{ $labels.namespace }} describe deploy/{{ $labels.deployment }}"
           runbook: docs/RUNBOOK.md#service-indisponible
 
+      # Objectif : 99 % des appels du client témoin réussissent, pour chaque
+      # route. Par route : tout mélangé, la télémétrie des vélos, plus
+      # fréquente, dilue les autres routes ; on ne saurait pas laquelle est
+      # touchée, et une panne partielle d'une route peu appelée passerait sous
+      # le seuil. Une erreur, c'est un code 5xx ou un appel qui n'a pas abouti
+      # ("erreur") ; un 401 est une réponse.
+      - alert: DisponibiliteSousObjectif
+        expr: |
+          sum by (namespace, route) (rate(velocite_client_requests_total{code=~"5..|erreur"}[5m]))
+            / sum by (namespace, route) (rate(velocite_client_requests_total[5m]))
+            > 0.01
+        for: 2m
+        labels:
+          severity: critique
+        annotations:
+          summary: "{{ $labels.namespace }} : plus de 1 % d'échecs sur {{ $labels.route }}, vus par le client témoin"
+          description: "Le tableau de bord VéloCité, panneau disponibilité ; puis kubectl -n {{ $labels.namespace }} get pods et les logs du frontal."
+          runbook: docs/RUNBOOK.md#service-indisponible
+
       # Fournie : la mise à jour qui n'avance plus (l'incident de l'atelier 6).
       - alert: MiseAJourBloquee
         expr: kube_deployment_status_condition{namespace=~"velocite-.*", condition="Progressing", status="false"} == 1
@@ -39,35 +54,6 @@ groups:
           summary: "La mise à jour de {{ $labels.deployment }} n'avance plus dans {{ $labels.namespace }}"
           description: "Les nouveaux pods ne deviennent pas prêts. Les anciens servent toujours. Lire les logs du nouveau pod, puis décider : corriger ou revenir en arrière."
           runbook: docs/RUNBOOK.md#retour-arriere
-
-      # La disponibilité réellement vécue par le client témoin, route par
-      # route. Les 5xx et les erreurs réseau comptent comme des échecs.
-      - alert: DisponibiliteClientDegradee
-        expr: |
-          (
-            sum by (namespace, route) (rate(velocite_client_requests_total{code=~"5..|erreur"}[5m]))
-            /
-            sum by (namespace, route) (rate(velocite_client_requests_total[5m]))
-          ) > 0.01
-        for: 2m
-        labels:
-          severity: critique
-        annotations:
-          summary: "La disponibilité de {{ $labels.route }} est inférieure à 99 % dans {{ $labels.namespace }}"
-          description: "Le client témoin voit plus de 1 % d'échecs sur cinq minutes. Vérifier nginx et l'API, puis les codes par route dans Prometheus."
-          runbook: docs/RUNBOOK.md#disponibilite-client-degradee
-
-      # Une salve d'exports est visible même si l'API reste disponible : elle
-      # peut être légitime, mais mérite une vérification de l'usage du compte.
-      - alert: SalveExportsDataScience
-        expr: sum by (namespace) (increase(velocite_rows_exported_total{role="datascientist"}[5m])) > 1000
-        for: 1m
-        labels:
-          severity: avertissement
-        annotations:
-          summary: "Plus de 1 000 lignes ont été exportées par data science dans {{ $labels.namespace }}"
-          description: "Vérifier la demande d'analyse, le volume exporté et les journaux d'accès avant de considérer la salve comme attendue."
-          runbook: docs/RUNBOOK.md#salve-exports-data-science
 
   # Fournies : elles lisent l'issue que l'étape signaler du bilan dépose dans
   # la Pushgateway (workflows/bilan-quotidien.yaml).
@@ -90,3 +76,16 @@ groups:
           summary: "Aucun bilan réussi depuis plus de 26 h dans {{ $labels.env }}"
           description: "Le CronWorkflow est-il suspendu ? argo -n velocite-{{ $labels.env }} cron list"
           runbook: docs/RUNBOOK.md#reprise-du-bilan
+
+  # Ajoutée à l'atelier 8 : l'export est autorisé au rôle datascientist, son
+  # volume ne l'est pas forcément. On rend la salve visible, sans conclure.
+  - name: velocite-securite
+    rules:
+      - alert: ExtractionMassive
+        expr: sum by (namespace, role) (increase(velocite_rows_exported_total{role="datascientist"}[10m])) > 5000
+        labels:
+          severity: avertissement
+        annotations:
+          summary: "Plus de 5000 lignes exportées en 10 min par le rôle datascientist ({{ $labels.namespace }})"
+          description: "L'export est autorisé, son volume ne l'est pas forcément. Qui, quand, pour quoi : vérifier avec l'équipe data avant de conclure."
+          runbook: docs/RUNBOOK.md#extraction-massive
