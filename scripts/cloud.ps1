@@ -18,7 +18,7 @@
   Avant la première étape, dans ce PowerShell (une fois par terminal) :
     $s = Read-Host -AsSecureString "Token Hetzner"
     $env:HCLOUD_TOKEN = [Net.NetworkCredential]::new("", $s).Password
-    $env:TF_VAR_eleve = "velocite-equipe3"     # le numéro de votre équipe
+    $env:TF_VAR_eleve = "velocite-equipe-MAURY-PADONOU-ADNANE" # identifiant transmis avec le token
     $env:TF_VAR_phrase_etat = Read-Host "Phrase du state"
 
 .EXAMPLE
@@ -33,7 +33,7 @@ param(
 . "$PSScriptRoot/commun.ps1"
 
 Test-PhraseEtat
-if (-not $env:TF_VAR_eleve) { throw "Définissez `$env:TF_VAR_eleve = `"velocite-equipeN`" (le numéro de votre équipe)." }
+if (-not $env:TF_VAR_eleve) { throw 'Définissez $env:TF_VAR_eleve avec l''identifiant d''équipe transmis avec le token Hetzner.' }
 $Couche = "$Racine/infra/00-cloud-hetzner"
 $Copie20 = "$Racine/infra/00-cloud-hetzner/.env-cloud"   # copie de infra/20-env, state à part
 $Contexte = "hetzner-$($env:TF_VAR_eleve)"

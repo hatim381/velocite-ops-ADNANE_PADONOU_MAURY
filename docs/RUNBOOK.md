@@ -17,6 +17,62 @@ porte une ancre explicite, sans accent, que GitHub ne modifie pas.
 
 ---
 
+<a id="restauration"></a>
+## Restauration des données
+
+### Ce qu'on voit
+
+Le StatefulSet PostgreSQL ou sa PVC `donnees-postgres-0` a été perdu, ou la
+vérification de la donnée du jour ne retrouve plus les 250 trajets du client
+`flotte@cote-livraisons.example`. Le RPO est l'âge de la dernière sauvegarde
+réussie : toute donnée ajoutée après celle-ci peut être perdue.
+
+### Vérifier
+
+```powershell
+./scripts/donnees-du-jour.ps1 -Verifier
+Get-ChildItem sauvegardes/velocite-dev-*.sql | Sort-Object Name
+kubectl -n velocite-dev get statefulset,pod,pvc
+```
+
+Choisir la sauvegarde la plus récente créée avant l'incident. La preuve à
+retrouver est `250` trajets et l'empreinte `9b7904d63be2`.
+
+### Agir
+
+Après une perte de disque, recréer d'abord la base vide depuis le manifeste,
+puis attendre son démarrage et rejouer une sauvegarde locale. Les fichiers SQL
+restent hors de Git car ils contiennent des données personnelles.
+
+```powershell
+kubectl apply -k deploy/overlays/dev
+./scripts/restaurer.ps1 -Env dev
+```
+
+Le RTO est la durée affichée par `restaurer.ps1`, mesurée depuis l'attente de
+PostgreSQL jusqu'à la fin de la restauration. La relever à chaque exercice ou
+incident avec l'heure de la sauvegarde utilisée.
+
+### Mesures de l'exercice du 23 octobre 2026
+
+La sauvegarde utilisée a été terminée à 12:13:17 (heure de Paris) et le nouveau
+disque a été créé à 12:13:38 : le RPO constaté est donc de 21 secondes. La
+restauration a terminé en 2 secondes : RTO mesuré de 2 secondes, hors temps de
+diagnostic et de recréation du StatefulSet.
+
+### Confirmer
+
+```powershell
+./scripts/donnees-du-jour.ps1 -Verifier
+kubectl -n velocite-dev rollout status statefulset/postgres
+```
+
+La commande doit annoncer les 250 trajets et l'empreinte `9b7904d63be2` ; le
+StatefulSet doit avoir un replica prêt. La création du client doit être
+antérieure au nouveau disque : elle provient alors bien de la sauvegarde.
+
+---
+
 <a id="service-indisponible"></a>
 ## Service indisponible
 
@@ -221,3 +277,67 @@ argo -n velocite-dev get '@latest'
 ./scripts/compter-bilan.ps1 -Date 2026-03-12 -Env dev
 kubectl -n velocite-dev get cronworkflow bilan-quotidien
 ```
+
+---
+
+<a id="budget-erreur"></a>
+## Budget d'erreur consommé vite
+
+### Ce qu'on voit
+
+L'alerte `BudgetErreurConsommeVite` est déclenchée pour une route : plus de
+14,4 % des appels du client témoin échouent à la fois sur les cinq dernières
+minutes et sur l'heure écoulée. Elle signale une dégradation suffisamment forte
+et durable pour épuiser rapidement le budget d'erreur du SLO à 99 %.
+
+### Vérifier
+
+```powershell
+kubectl -n observabilite port-forward svc/prometheus-server 9090:80
+# Dans Prometheus, vérifier les deux séries par namespace et route :
+# velocite:echecs_client:ratio_rate5m
+# velocite:echecs_client:ratio_rate1h
+kubectl -n velocite-dev get pods
+kubectl -n velocite-dev get events --sort-by=.lastTimestamp
+kubectl -n velocite-dev logs deployment/nginx --tail=100
+kubectl -n velocite-dev logs deployment/api --tail=100
+```
+
+Les deux ratios doivent dépasser `0.144` pour la même route. Vérifier les pods,
+le frontal et l'API avant toute action afin de distinguer une indisponibilité de
+l'API, une erreur du frontal ou une dépendance défaillante.
+
+### Agir
+
+Rétablir le composant en cause avec le manifeste versionné. Si l'API n'a plus de
+pod prêt, remettre son nombre de replicas attendu, puis réappliquer l'overlay :
+
+```powershell
+kubectl -n velocite-dev scale deployment/api --replicas=1
+kubectl apply -k deploy/overlays/dev
+kubectl -n velocite-dev rollout status deployment/api
+```
+
+Ne pas modifier une configuration durable directement dans le cluster : toute
+correction doit être reportée dans le dépôt avant le prochain déploiement.
+
+### Confirmer
+
+```powershell
+kubectl -n velocite-dev get pods
+./scripts/smoke.ps1 -Env dev
+kubectl diff -k deploy/overlays/dev
+```
+
+Le déploiement doit être prêt, le smoke test doit réussir et `kubectl diff` ne
+doit rien afficher. Après le retour à la normale, l'alerte disparaît lorsque la
+fenêtre de cinq minutes ne contient plus assez d'échecs ; le ratio sur une heure
+retombe ensuite progressivement.
+
+### Exercice du 23 octobre 2026
+
+Sur `velocite-dev`, l'API a été coupée à 10:48:02 puis remise à un replica vers
+10:58 (heure de Paris). `BudgetErreurConsommeVite` a été observée en état
+`firing` à 10:57:31 sur `/api/login`, puis était inactive à 11:05:14. Le délai
+de retour est attendu : après le redémarrage, la fenêtre de cinq minutes doit
+d'abord évacuer les erreurs de la coupure.

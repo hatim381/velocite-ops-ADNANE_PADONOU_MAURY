@@ -25,8 +25,8 @@ IP=$(curl -sS http://169.254.169.254/hetzner/v1/metadata/public-ipv4)
 #        machine, sinon kubectl le refuse : la variable shell de l'étape 2,
 #        écrite $NOM, entre guillemets.
 curl -sfL https://get.k3s.io | \
-  INSTALL_K3S_VERSION="A FAIRE" sh -s - server \
-  --tls-san "A FAIRE" \
+  INSTALL_K3S_VERSION="${version_k3s}" sh -s - server \
+  --tls-san "$IP" \
   --disable traefik \
   --disable servicelb \
   --write-kubeconfig-mode 0600
@@ -34,4 +34,4 @@ curl -sfL https://get.k3s.io | \
 #    3.c Le fichier témoin : scripts/cloud.ps1 attend, toutes les 15
 #        secondes, que /var/lib/velocite-pret existe pour savoir que la
 #        machine est prête. Une commande Linux qui crée un fichier vide.
-A FAIRE
+touch /var/lib/velocite-pret

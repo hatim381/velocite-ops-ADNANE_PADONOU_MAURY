@@ -21,9 +21,9 @@ locals {
   #       numéro est dans deploy/overlays/dev/kustomization.yaml).
   #     Les numéros sont sur la slide 29.
   ports_entrants = {
-    "A FAIRE port SSH"        = "SSH, pour scripts/cloud.ps1"
-    "A FAIRE port API"        = "API Kubernetes, pour kubectl et OpenTofu"
-    "A FAIRE port du frontal" = "frontal VéloCité (NodePort)"
+    "22"    = "SSH, pour scripts/cloud.ps1"
+    "6443"  = "API Kubernetes, pour kubectl et OpenTofu"
+    "30443" = "frontal VéloCité (NodePort)"
   }
 
   # 1.b D'où ces ports sont joignables : une liste d'UNE seule adresse, la
@@ -32,7 +32,7 @@ locals {
   #     dans variables.tf. Écrivez le nom de cette variable (var.xxx), sans
   #     guillemets, entre les crochets, puis effacez la marque en fin de
   #     ligne (la liste attend une adresse, pas un texte).
-  sources_autorisees = [] # A FAIRE 1.b
+  sources_autorisees = [var.mon_ip]
 }
 
 resource "hcloud_firewall" "k3s" {

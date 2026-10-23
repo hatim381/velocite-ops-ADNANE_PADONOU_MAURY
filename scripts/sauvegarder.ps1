@@ -27,19 +27,24 @@ New-Item -ItemType Directory -Force -Path $dossier | Out-Null
 $horodatage = Get-Date -Format "yyyyMMdd-HHmmss"
 $fichier = "sauvegardes/velocite-$Env-$horodatage.sql"
 
-# A FAIRE (atelier 10) : trois commandes, chacune par Invoke-Commande, qui
-# s'arrête si la commande échoue. Le modèle : scripts/compter-bilan.ps1.
-#   1. Dans le pod, pg_dump écrit /tmp/sauvegarde.sql :
-#        kubectl -n $ns exec statefulset/postgres '--' sh -c $dump
-#      où $dump est la commande lancée dans le pod : utilisateur postgres,
-#      base velocite, options --clean --if-exists, -f /tmp/sauvegarde.sql,
-#      le mot de passe lu dans le pod :
-#        PGPASSWORD=$(cat /run/secrets/postgres_password)
-#      Écrivez '--' entre apostrophes : sans elles, PowerShell l'avale.
-#   2. kubectl cp "$ns/postgres-0:/tmp/sauvegarde.sql" $fichier, lancé
-#      depuis la racine du dépôt (Push-Location $Racine, puis Pop-Location).
-#   3. Effacer /tmp/sauvegarde.sql dans le pod (rm -f).
-# Puis afficher le nom du fichier et sa taille.
+$dump = 'PGPASSWORD=$(cat /run/secrets/postgres_password) pg_dump -U postgres -d velocite --clean --if-exists -f /tmp/sauvegarde.sql'
 
-$aFaire = "A FAIRE (atelier 10) : ce script ne sauvegarde encore rien."
-Write-Host $aFaire -ForegroundColor Yellow
+Invoke-Etape "Export PostgreSQL dans le pod" {
+    Invoke-Commande kubectl -n $ns exec statefulset/postgres '--' sh -c $dump
+}
+Invoke-Etape "Copie de la sauvegarde sur le poste" {
+    Push-Location $Racine
+    try {
+        Invoke-Commande kubectl cp "$ns/postgres-0:/tmp/sauvegarde.sql" $fichier
+    } finally {
+        Pop-Location
+    }
+}
+Invoke-Etape "Nettoyage du fichier temporaire du pod" {
+    Invoke-Commande kubectl -n $ns exec statefulset/postgres '--' rm -f /tmp/sauvegarde.sql
+}
+
+$taille = (Get-Item (Join-Path $Racine $fichier)).Length
+Write-Host ""
+Write-Host ("Sauvegarde créée : {0} ({1:n0} octets)" -f $fichier, $taille) -ForegroundColor Green
+Show-Releve

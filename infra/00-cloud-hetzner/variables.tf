@@ -1,10 +1,10 @@
 variable "eleve" {
-  description = "L'identifiant de votre équipe, velocite-equipeN (N, le numéro reçu avec le token) : il nomme et étiquette tout ce que vous créez. $env:TF_VAR_eleve."
+  description = "L'identifiant de votre équipe, transmis avec le token : il nomme et étiquette tout ce que vous créez. $env:TF_VAR_eleve."
   type        = string
 
   validation {
-    condition     = can(regex("^velocite-(equipe[1-9][0-9]?|prof)$", var.eleve))
-    error_message = "TF_VAR_eleve : format attendu velocite-equipeN, avec le numéro de votre équipe, celui du message Moodle qui donne le token (par exemple velocite-equipe3), en minuscules."
+    condition     = can(regex("^velocite-(equipe[1-9][0-9]?|prof|equipe-[A-Z]+(?:-[A-Z]+)+)$", var.eleve))
+    error_message = "TF_VAR_eleve : format attendu velocite-equipeN, velocite-prof, ou le nouvel identifiant nominatif transmis avec le token (par exemple velocite-equipe-MAURY-PADONOU-ADNANE)."
   }
 }
 

@@ -31,9 +31,7 @@ tests:
           route="/api/stations", code="erreur"}
         values: '0x60 60+60x9 600x30'
     alert_rule_test:
-      # A FAIRE (atelier 9) : trois vérifications de l'alerte
-      # BudgetErreurConsommeVite, chacune avec eval_time, alertname et
-      # exp_alerts (le modèle : observability/tests/alertes_test.yaml).
+      # Trois vérifications de l'alerte BudgetErreurConsommeVite.
       #   - À la minute 65 : aucune alerte (exp_alerts: []).
       #   - À la minute 72 : l'alerte, avec exactement ces labels et ces
       #     annotations (votre règle doit porter les mêmes) :
@@ -51,7 +49,25 @@ tests:
       #           disponibilité ; puis kubectl -n velocite-dev get pods.
       #         runbook: docs/RUNBOOK.md#budget-erreur
       #   - À la minute 76 : plus aucune alerte.
-      # Avant de lancer promtool, dites pour chaque instant ce que vaut la
-      # part d'échecs sur 5 minutes et sur 1 heure (slide 9). Remplacez
-      # ensuite la liste vide ci-dessous par vos trois vérifications.
-      []
+      - eval_time: 65m
+        alertname: BudgetErreurConsommeVite
+        exp_alerts: []
+      - eval_time: 72m
+        alertname: BudgetErreurConsommeVite
+        exp_alerts:
+          - exp_labels:
+              severity: critique
+              namespace: velocite-dev
+              route: /api/stations
+            exp_annotations:
+              summary: >-
+                velocite-dev : le budget d'erreur de /api/stations
+                part 14,4 fois trop vite
+              description: >-
+                Plus de 14,4 % d'échecs sur l'heure écoulée et sur les 5
+                dernières minutes. Le tableau de bord VéloCité, panneau
+                disponibilité ; puis kubectl -n velocite-dev get pods.
+              runbook: docs/RUNBOOK.md#budget-erreur
+      - eval_time: 76m
+        alertname: BudgetErreurConsommeVite
+        exp_alerts: []

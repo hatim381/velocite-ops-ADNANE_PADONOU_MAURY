@@ -31,29 +31,29 @@ resource "local_sensitive_file" "cle_ssh" {
 resource "hcloud_server" "k3s" {
   # 2.a Le nom de la machine : celui de votre équipe, que porte une variable
   #     de variables.tf. C'est aussi le nom que cherche scripts/cloud.ps1.
-  name = "A FAIRE"
+  name = var.eleve
 
   # 2.b Le système : Ubuntu 24.04 LTS, l'image testée avec k3s pour ce cours.
   image = "ubuntu-24.04"
 
   # 2.c Le type de machine (son nombre de vCPU, donc son prix) : la variable
   #     de variables.tf qui le porte. Elle est verrouillée sur le type prévu.
-  server_type = "A FAIRE"
+  server_type = var.type_serveur
 
   # 2.d Le centre de données : la variable de variables.tf qui le porte. Si
   #     Hetzner répond "server type not available", on change la variable
   #     ($env:TF_VAR_emplacement = "fsn1"), jamais cette ligne.
-  location = "A FAIRE"
+  location = var.emplacement
 
   # 2.e La clé SSH qui ouvrira la machine : l'id de la ressource
   #     hcloud_ssh_key écrite plus haut dans ce fichier, dans une liste.
-  ssh_keys = ["A FAIRE"]
+  ssh_keys = [hcloud_ssh_key.k3s.id]
 
   # 2.f Le pare-feu de reseau.tf : son id, dans la liste. Sans lui, la
   #     machine serait joignable par tout Internet sur chacun de ses ports.
   #     Ici la marque est en fin de ligne (la liste attend un nombre, pas un
   #     texte) : écrivez la valeur entre les crochets, puis effacez la marque.
-  firewall_ids = [] # A FAIRE 2.f
+  firewall_ids = [hcloud_firewall.k3s.id]
 
   # Une adresse IPv4 publique, pas d'IPv6 : le pare-feu ne filtre qu'en IPv4
   # dans ce cours, et une adresse IPv6 coûterait une porte de plus à garder.
@@ -66,7 +66,7 @@ resource "hcloud_server" "k3s" {
   #     par templatefile avec une seule valeur : la version de k3s, que porte
   #     une variable de variables.tf.
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    version_k3s = "A FAIRE"
+    version_k3s = var.version_k3s
   })
 
   labels = {

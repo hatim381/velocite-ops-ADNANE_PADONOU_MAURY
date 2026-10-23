@@ -227,6 +227,22 @@ function Extraire-Erreurs {
     return (@($garde | Select-Object -Unique | Select-Object -First $Max) -join " | ")
 }
 
+function Test-PlanMontageCloud {
+    param([object[]]$Changements)
+    $attendues = @('tls_private_key.ssh', 'hcloud_ssh_key.k3s',
+        'local_sensitive_file.cle_ssh', 'hcloud_firewall.k3s', 'hcloud_server.k3s')
+    if ($Changements.Count -ne $attendues.Count) { return $false }
+    foreach ($adresse in $attendues) {
+        $ressource = @($Changements | Where-Object { $_.address -eq $adresse })
+        if ($ressource.Count -ne 1) { return $false }
+        $action = @($ressource[0].change.actions) -join ','
+        if ($action -in @('create', 'no-op')) { continue }
+        if ($adresse -eq 'hcloud_firewall.k3s' -and $action -eq 'update') { continue }
+        return $false
+    }
+    return $true
+}
+
 if ($AvantMonter) {
     if (@($Atelier).Count -ne 1 -or $Atelier[0] -ne 11) { throw "-AvantMonter ne vaut que pour l'atelier 11 : -Atelier 11 -AvantMonter" }
     $Couche = "infra/00-cloud-hetzner"
@@ -237,9 +253,9 @@ if ($AvantMonter) {
     Controle "Le token de l'équipe est dans ce terminal (HCLOUD_TOKEN, 64 caractères)" {
         $env:HCLOUD_TOKEN -and $env:HCLOUD_TOKEN.Length -eq 64
     } "les deux lignes de la fiche 11, partie 1 : `$s = Read-Host -AsSecureString, puis `$env:HCLOUD_TOKEN = ... ; un token se colle en entier, sans espace"
-    Controle "L'identifiant de l'équipe (TF_VAR_eleve = velocite-equipeN)" {
-        $env:TF_VAR_eleve -cmatch '^velocite-(equipe[1-9][0-9]?|prof)$'
-    } "`$env:TF_VAR_eleve = `"velocite-equipe3`" (votre numéro, celui du message Moodle), en minuscules"
+    Controle "L'identifiant de l'équipe (TF_VAR_eleve)" {
+        $env:TF_VAR_eleve -cmatch '^velocite-(equipe[1-9][0-9]?|prof|equipe-[A-Z]+(?:-[A-Z]+)+)$'
+    } "`$env:TF_VAR_eleve = `"velocite-equipe-MAURY-PADONOU-ADNANE`" : utilisez exactement l'identifiant transmis avec le token Hetzner"
     Controle "La phrase du state (TF_VAR_phrase_etat, 16 caractères au moins)" {
         $env:TF_VAR_phrase_etat -and $env:TF_VAR_phrase_etat.Length -ge 16
     } "`$env:TF_VAR_phrase_etat = Read-Host `"Phrase du state`" : la même toute l'équipe, notée hors du dépôt"
@@ -307,13 +323,8 @@ if ($AvantMonter) {
         }
         if (Test-Path $plan) { Remove-Item $plan -Force }
         $ligne = @($p.Texte -split "`r?`n" | Where-Object { $_ -match '^(Plan:|No changes)' }) | Select-Object -First 1
-        $actions = @()
-        if ($json) { $actions = @($json.resource_changes | ForEach-Object { @($_.change.actions) -join "," }) }
-        $ajouts = @($actions | Where-Object { $_ -eq "create" }).Count
-        $autres = @($actions | Where-Object { $_ -ne "create" -and $_ -ne "no-op" -and $_ -ne "read" }).Count
-        $deja = @($actions | Where-Object { $_ -eq "no-op" }).Count
-        Controle "tofu plan : 5 ressources à créer (clé TLS, clé SSH, fichier de clé, pare-feu, serveur), rien à modifier ni à détruire" {
-            $json -and $autres -eq 0 -and (($ajouts -eq 5) -or ($deja -gt 0 -and $ajouts + $deja -eq 5))
+        Controle "tofu plan : les 5 ressources prévues, création ou reprise ; seule la mise à jour du pare-feu est permise" {
+            $json -and (Test-PlanMontageCloud @($json.resource_changes))
         } $(if ($p.Code -ne 0) { (Extraire-Erreurs $p.Texte) + " ; adresse lue : $ip/32" } else { "le plan dit : $ligne" })
 
         # Le détail du plan, seulement s'il a abouti : sinon, le KO du plan

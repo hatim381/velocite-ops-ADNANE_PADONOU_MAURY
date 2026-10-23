@@ -13,4 +13,15 @@
 # que BudgetErreurConsommeVite remplace.
 # Vérifier : ./scripts/promtool.ps1 check rules observability/regles/enregistrement.yaml
 
-groups: []
+groups:
+  - name: velocite-slo
+    rules:
+      - record: velocite:echecs_client:ratio_rate5m
+        expr: |
+          sum by (namespace, route) (rate(velocite_client_requests_total{code=~"5..|erreur"}[5m]))
+            / sum by (namespace, route) (rate(velocite_client_requests_total[5m]))
+
+      - record: velocite:echecs_client:ratio_rate1h
+        expr: |
+          sum by (namespace, route) (rate(velocite_client_requests_total{code=~"5..|erreur"}[1h]))
+            / sum by (namespace, route) (rate(velocite_client_requests_total[1h]))

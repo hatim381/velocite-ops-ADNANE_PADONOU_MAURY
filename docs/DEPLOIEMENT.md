@@ -200,3 +200,38 @@ dernier plan doit indiquer `No changes.`
 | Symptôme | Cause probable | Que faire |
 |---|---|---|
 | | | |
+
+## Hetzner - déploiement cloud
+
+Le déploiement cloud remplace seulement la couche locale `infra/00-cluster`.
+Les couches d'environnement et les manifests Kustomize restent inchangés. Dans
+un terminal PowerShell, définir le token Hetzner, l'identifiant d'équipe reçu
+avec lui et la phrase de chiffrement du state ; aucun de ces secrets ne doit
+être inscrit dans un fichier ou Git.
+
+```powershell
+./scripts/cloud.ps1 -Etape monter
+./scripts/cloud.ps1 -Etape deployer
+./scripts/cloud.ps1 -Etape verifier
+```
+
+`monter` détecte l'IP publique du poste, vérifie le pare-feu, puis crée le
+serveur k3s avec les seuls ports 22, 6443 et 30443 ouverts à cette IP. Il doit
+ajouter le contexte `hetzner-<identifiant-equipe>` et afficher un nœud Ready.
+`deployer` construit les images sur la machine, applique l'environnement dev
+et le même overlay que sur kind. `verifier` doit répondre avec la version de
+l'API en HTTPS, certificat vérifié.
+
+Si le VPN ou le réseau change l'IP publique du poste, relancer `monter` dans le
+terminal contenant les variables d'environnement. Le plan peut alors mettre
+à jour le pare-feu avec la nouvelle IP en /32, puis reprendre l'attente de k3s
+et la configuration de kubectl. Le contrôle refuse toute suppression ou tout
+remplacement, ainsi que la modification d'une autre ressource.
+
+Le cloud diffère de kind par son IP publique et son pare-feu : l'accès ne se
+fait plus par `localhost:8443`, mais par le NodePort HTTPS de la machine. Une
+fois les preuves recueillies, arrêter la facturation avec :
+
+```powershell
+./scripts/cloud.ps1 -Etape detruire
+```

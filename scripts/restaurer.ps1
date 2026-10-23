@@ -40,20 +40,31 @@ try {
     }
 } finally { Pop-Location }
 
-# A FAIRE (atelier 10) : chronométrez ce qui suit, avec
-# [System.Diagnostics.Stopwatch]::StartNew() (le modèle : Invoke-Etape,
-# dans scripts/commun.ps1), puis :
-#   1. Attendre que la base soit prête :
-#        kubectl -n $ns rollout status statefulset/postgres --timeout=300s
-#   2. kubectl cp $Fichier "$ns/postgres-0:/tmp/restauration.sql", lancé
-#      depuis la racine du dépôt.
-#   3. Dans le pod, psql rejoue le fichier : utilisateur postgres, base
-#      velocite, -v ON_ERROR_STOP=1 (arrêt à la première erreur),
-#      -f /tmp/restauration.sql, le mot de passe comme dans sauvegarder.ps1.
-#   4. Effacer /tmp/restauration.sql dans le pod.
-# Puis afficher la durée : c'est votre RTO mesuré.
-# Ne passez jamais le fichier par un pipe PowerShell (Get-Content ... |) :
-# Windows PowerShell 5.1 y abîmerait les accents. Toujours kubectl cp.
+$chrono = [System.Diagnostics.Stopwatch]::StartNew()
+try {
+    Invoke-Etape "Attente de PostgreSQL" {
+        Invoke-Commande kubectl -n $ns rollout status statefulset/postgres --timeout=300s
+        Invoke-Commande kubectl -n $ns exec statefulset/postgres '--' pg_isready -U postgres -d velocite
+    }
+    Invoke-Etape "Copie de la sauvegarde dans le pod" {
+        Push-Location $Racine
+        try {
+            Invoke-Commande kubectl cp $Fichier "$ns/postgres-0:/tmp/restauration.sql"
+        } finally {
+            Pop-Location
+        }
+    }
+    $restore = 'PGPASSWORD=$(cat /run/secrets/postgres_password) psql -U postgres -d velocite -v ON_ERROR_STOP=1 -f /tmp/restauration.sql'
+    Invoke-Etape "Restauration PostgreSQL" {
+        Invoke-Commande kubectl -n $ns exec statefulset/postgres '--' sh -c $restore
+    }
+} finally {
+    $chrono.Stop()
+}
 
-$aFaire = "A FAIRE (atelier 10) : ce script ne restaure encore rien."
-Write-Host "$aFaire ($Fichier)" -ForegroundColor Yellow
+Invoke-Etape "Nettoyage du fichier temporaire du pod" {
+    Invoke-Commande kubectl -n $ns exec statefulset/postgres '--' rm -f /tmp/restauration.sql
+}
+Write-Host ""
+Write-Host ("Restauration terminée en {0:n0} s : RTO mesuré." -f $chrono.Elapsed.TotalSeconds) -ForegroundColor Green
+Show-Releve
